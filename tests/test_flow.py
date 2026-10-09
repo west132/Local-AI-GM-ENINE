@@ -73,7 +73,7 @@ def test_the_ai_sees_the_ask_result_before_it_decides_the_consequence(monkeypatc
     monkeypatch.setattr(M, "ask", lambda l, rng=None: {"dice": [1, 2], "likelihood": l, "total": 3 + l, "band": "NO, AND"})
     w = world()
     llm = Scripted([LOOP_REACT,
-                    {"asks": [{"question": "Does Hobb let me stay?", "likelihood": 1, "for": "the house is half empty"}]},
+                    {"asks": [{"question": "Does Hobb let me stay?", "obvious": "none", "likelihood": 1, "for": "the house is half empty"}]},
                     {"minutes": 10, "ops": [{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "hostile"}]},
                     "He refuses.", OK])
     t = flow.run_turn(w, llm, "I ask Hobb for a room")
@@ -299,9 +299,9 @@ def test_wh_question_and_unsupported_likelihood_are_not_rolled():
     t = flow.Turn(world(), "x")
     t.final = True
     flow.h_ask_roll(t, {"asks": [
-        {"question": "What has been happening in town?", "likelihood": 3},
-        {"question": "Does Hobb have a spare room?", "likelihood": 2},
-        {"question": "Does Hobb have a spare room?", "likelihood": 2, "for": "the house is half empty"}]})
+        {"question": "What has been happening in town?", "obvious": "none", "likelihood": 3},
+        {"question": "Does Hobb have a spare room?", "obvious": "none", "likelihood": 2},
+        {"question": "Does Hobb have a spare room?", "obvious": "none", "likelihood": 2, "for": "the house is half empty"}]})
     assert len([l for l in t.lines if l.startswith("ask")]) == 1
 
 

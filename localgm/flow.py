@@ -52,6 +52,9 @@ class Turn:
         self.dues_pass = 1
         self.in_fight = False
         self.final = False              # the handler is running on the AI's last allowed attempt
+        self.rolled = 0                 # questions the dice settled this turn
+        self.settled = 0                # questions the records settled (no dice)
+        self.ask_rounds = 0             # times the reaction asked for more results before deciding
         self.injury_owed = 0            # lasting injuries the player must be given (named by the AI, recorded by the program)
         self.shape = None               # SHORT | LONG | CHAIN when a new offer's shape was rolled this turn
         self.hidden: list[str] = []     # records changed that the narrator must not be told about
@@ -93,8 +96,8 @@ def scene(world: World, secret: bool) -> str:
         shown = {k: r[k] for k in keys if k in r}
         shown["doing"] = (r.get("state") or {}).get("status")
         out.append(f"PERSON {rid}: {json.dumps(shown, ensure_ascii=False)}")
-    others = [f"{rid}: {r.get('name')} ({(r.get('state') or {}).get('status', '')})" for rid, r in (t.get("npcs") or {}).items()
-              if rid not in world.actors_here()] if secret else []
+    others = [f"{rid}: {r.get('name')}" + (f" ({(r.get('state') or {}).get('status')})" if (r.get("state") or {}).get("status") else "")
+              for rid, r in (t.get("npcs") or {}).items() if rid not in world.actors_here()] if secret else []
     if others:
         out.append("ELSEWHERE (not present): " + "; ".join(others))
     return "\n".join(out)
@@ -112,12 +115,14 @@ def pressures(world: World) -> str:
 
 
 def inputs(step: dict, turn: Turn) -> str:
-    w, parts = turn.world, []
+    w, parts, scene_done = turn.world, [], False
     for name in step["input"]:
         if name == "player_text":
             parts.append(f"PLAYER: {turn.text}")
         elif name in ("place", "actors_present"):
-            parts.append(scene(w, secret=step["id"] != "tell" and step["id"] != "audit"))
+            if not scene_done:               # the place and who is in it are shown once, however many names ask for them
+                parts.append(scene(w, secret=step["id"] != "tell" and step["id"] != "audit"))
+                scene_done = True
         elif name == "records_in_play":
             parts.append(brief(w))
         elif name == "pressures":
@@ -317,28 +322,33 @@ def h_combat(turn: Turn, out: dict):
 
 
 _WH = re.compile(r"^\s*(what|who|whom|whose|where|when|why|how|which)\b", re.I)
+_OBV = re.compile(r"^\s*(YES|NO)\b[\s:\-–—]*(.*)$", re.I | re.S)
 
 
 def ask_problem(a: dict) -> str | None:
-    """An open question is yes/no and every likelihood point rests on a stated fact (section 11)."""
+    """An open question is yes/no; a rolled one has every likelihood point resting on a stated fact (section 11)."""
     if _WH.match(a["question"]) or not a["question"].strip().endswith("?"):
         return f"question {a['question']!r} must be a yes/no question ending in '?'; what the records already say is not rolled"
-    if a["likelihood"] and not (a.get("for") or a.get("against")):
+    obv = str(a.get("obvious", "none")).strip()
+    if obv.lower() != "none" and not _OBV.match(obv):
+        return f"question {a['question']!r}: 'obvious' is 'none' or 'YES - why' / 'NO - why'"
+    if obv.lower() == "none" and a["likelihood"] and not (a.get("for") or a.get("against")):
         return f"question {a['question']!r}: a likelihood of {a['likelihood']:+d} needs the fact behind it in 'for' or 'against'"
     return None
 
 
-def h_ask_roll(turn: Turn, out: dict):
+def do_asks(turn: Turn, asks: list[dict]) -> None:
+    """Settle what has an obvious answer; roll only what could honestly go either way."""
     w = turn.world
-    bad = [p for p in map(ask_problem, out["asks"]) if p]
-    for a in out["asks"]:
+    bad = [p for p in map(ask_problem, asks) if p]
+    for a in asks:
         try:
             rules.check_cites(w, a.get("cites", []))
         except M.RuleError as e:
             bad.append(str(e))
     if bad and not turn.final:
         raise M.RuleError("\n- " + "\n- ".join(bad))
-    for a in out["asks"]:
+    for a in asks:
         if ask_problem(a):
             continue                          # refused twice: not rolled, not recorded
         try:
@@ -351,11 +361,24 @@ def h_ask_roll(turn: Turn, out: dict):
             _bind(turn, key, prev, a.get("governs"))
             turn.results.append(f"RESULT question '{a['question']}' → {prev['outcome']} (already answered in round {prev['round']}; not asked again)")
             continue
+        obv = _OBV.match(str(a.get("obvious", "none")).strip())
+        if obv:                               # the obvious answer stands; no dice
+            yes = obv.group(1).upper() == "YES"
+            label = f"{'YES' if yes else 'NO'} (settled)"
+            turn.settled += 1
+            turn.results.append(f"RESULT question '{a['question']}' → {label}: {obv.group(2).strip()}")
+            _bind(turn, key, rules.record_result(w, key, "settled", label, yes, a["question"], a.get("governs", [])), a.get("governs"))
+            continue
         r = M.ask(a["likelihood"])
+        turn.rolled += 1
         d1, d2 = r["dice"]
         turn.lines.append(f"ask 2d10: {d1}+{d2} {r['likelihood']:+d} = {r['total']} → {r['band']} ({a['question']})")
         turn.results.append(f"RESULT question '{a['question']}' → {r['band']}")
         _bind(turn, key, rules.record_result(w, key, "ask", r["band"], r["band"].startswith("YES"), a["question"], a.get("governs", [])), a.get("governs"))
+
+
+def h_ask_roll(turn: Turn, out: dict):
+    do_asks(turn, out["asks"])
 
 
 def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], facts: list[str], lines: list[str]) -> list[str]:
@@ -397,25 +420,50 @@ def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], fa
     return faults
 
 
+_ACTOR = re.compile(r"^(npcs|factions)\.([^.]+)")
+
+
+def _hidden_from_narrator(turn: Turn, path: str) -> bool:
+    """What the player has learned (discovered information, their own record) the narrator may tell.
+    What happens to people who are not here, and what is hidden, it may not (I5, I9)."""
+    if ".discovered_information" in path or path.startswith("player."):
+        return False
+    if rules.HIDDEN_PATH.search(path):
+        return True
+    m = _ACTOR.match(path)
+    if not m:
+        return False
+    return m.group(1) == "factions" or m.group(2) not in turn.world.actors_here()
+
+
 def _record_lines(turn: Turn, ops: list[dict]) -> None:
     """What the narrator may be told was recorded. Hidden records are kept from it (I5, I9)."""
     for op in ops:
         v = json.dumps(op.get("value"), ensure_ascii=False) if "value" in op else ""
         line = f"RECORDED {op['op']} {op['path']} {v[:160]}"
-        (turn.hidden if rules.HIDDEN_PATH.search(op["path"]) else turn.facts).append(line)
+        (turn.hidden if _hidden_from_narrator(turn, op["path"]) else turn.facts).append(line)
 
 
 def h_commit(turn: Turn, out: dict):
     """D: validate everything on a copy; commit all of it or none of it."""
+    if out.get("asks"):                      # the AI wants more results before it decides: ask, answer, ask again
+        if turn.ask_rounds >= 4:
+            raise M.RuleError("no more questions this turn: decide with the results you have (asks must be empty)")
+        turn.ask_rounds += 1
+        do_asks(turn, out["asks"])
+        return "ask_again"
     w, new_fills, facts, lines = turn.world, [], [], []
     trial = w.clone()
     faults = rules.op_faults(w, out["ops"], turn.resolved, turn.governs)
-    faults += trial.commit(out["ops"])
+    now_ops = [o for o in out["ops"] if o["op"] != "plan"]
+    plan_ops = [o for o in out["ops"] if o["op"] == "plan"]      # a plan's "in N minutes" counts from the end of the action
+    faults += trial.commit(now_ops)
     faults += _typed_changes(trial, turn, out, new_fills, facts, lines)
     minutes = int(out["minutes"]) if turn.dues_pass == 1 else 0
     if not faults:
         facts += rules.rest(trial, out.get("rest", "none"), minutes)
         trial.advance(minutes)
+        faults += trial.commit(plan_ops)
         for e in trial.down_checks():            # down and untreated for an hour
             d1, d2 = e["dice"]
             lines.append(f"{e['who']} down for an hour — 2d10: {d1}+{d2} → {'wakes at 1 HP' if e['woke'] else 'dies'}")
@@ -628,10 +676,10 @@ def run_turn(world: World, llm, text: str) -> Turn:
         if not _when(step["when"], turn):
             continue
         again = None
-        for _ in range(3):              # a handler may ask for one more pass (a due that fell during the action, a retelling)
+        for _ in range(8):              # a handler may ask for another pass: more results, a due that fell, a retelling
             again = execute(llm, step, turn)
             turn.ran.append(step["id"])
-            if again == "again":
+            if again in ("again", "ask_again"):
                 continue
             if again == "retell":
                 execute(llm, byid["tell"], turn)

@@ -61,6 +61,12 @@ Every V5 section ends up in exactly one of: **AI** (kept as a rule file loaded b
 | D Item entitlement | CODE |
 | Versioning | DROP (the program has its own version) |
 
+## B2. AI_RULES v5.0
+
+The first derivation left AI_RULES out except for language and narration. It holds the lessons added after models went wrong in play,
+including the dice rule ("decide the obvious; never roll to avoid being the one who said yes"). They are now `engine/rules/19_play_lessons.md`
+(the lines about judging and playing; tool, save and language lines are the program's), loaded by the sort, question, reaction and fight steps.
+
 ## C. Why this split
 
 Measured on the V5 engine text (token estimates, same method on every section):

@@ -41,7 +41,7 @@ intake:
 turn:
   - id: sort
     when: always
-    rules: [01_jobs, 03_invariants, 05_player_side, 06_sorting]
+    rules: [01_jobs, 03_invariants, 05_player_side, 06_sorting, 19_play_lessons]
     input: [player_text, place, active_quests, pending]
     output:
       type: object
@@ -101,8 +101,8 @@ turn:
 
   - id: fight
     when: "'fight' in sort.steps"
-    rules: [10_fights]
-    input: [player_text, player_state, records_in_play]
+    rules: [10_fights, 19_play_lessons]
+    input: [place, actors_present, player_text, player_state, records_in_play]
     output:
       type: object
       required: [exchanges]
@@ -133,13 +133,14 @@ turn:
               on_failure: {type: string, enum: [setback, loss, severe]}
               attackers:  {type: array, description: "who can hit the player on a failure", items: {type: object, required: [who, source], properties: {who: {type: string}, source: {type: string}}}}
               soak:       {type: integer, minimum: 0, maximum: 2}
+        kill: {type: boolean, description: "true if the player's order is to kill: a foe that goes down is then finished at once, without a roll"}
         stop: {type: string, description: "why the orders no longer cover the next exchange, if so"}
     program: combat
 
   # A: the AI says what is uncertain. Nothing is committed. B: the program rolls it.
   - id: wonder
     when: "'react' in sort.steps"
-    rules: [11_actors]
+    rules: [11_actors, 19_play_lessons]
     input: [place, actors_present, dues_fired, player_text, results_so_far, resolved_facts]
     output:
       type: object
@@ -147,11 +148,12 @@ turn:
       properties:
         asks:
           type: array
-          items:
+          items: &askitem
             type: object
-            required: [question, likelihood]
+            required: [question, obvious, likelihood]
             properties:
               question:   {type: string, description: "yes/no, ending in ?"}
+              obvious:    {type: string, description: "the obvious answer if one exists, as 'YES - why' or 'NO - why' (nothing is rolled); otherwise exactly 'none'"}
               likelihood: {type: integer, minimum: -3, maximum: 3}
               for:        {type: string}
               against:    {type: string}
@@ -163,12 +165,16 @@ turn:
   # C: the AI is told the results and says what follows from them. D: the program validates and commits, all or nothing.
   - id: react
     when: "'react' in sort.steps"
-    rules: [11_actors, 12_world]
+    rules: [11_actors, 12_world, 19_play_lessons]
     input: [place, actors_present, dues_fired, pressures, player_text, results_so_far, resolved_facts]
     output:
       type: object
       required: [minutes, ops]
       properties:
+        asks:
+          type: array
+          description: "ONLY if you need another result before you can decide: ask here and leave minutes/ops empty; the program answers and asks you again. Empty when you are ready to decide."
+          items: *askitem
         minutes: {type: integer, minimum: 0, description: "believable duration of what happened"}
         ops:
           type: array
@@ -181,7 +187,7 @@ turn:
               path:  {type: string}
               value: {}
               due_in_minutes: {type: integer, minimum: 0}
-              requires: {type: object, description: "REQUIRED for any path a result governs: {on: the question or subject, answer: YES|NO|SUCCESS|FAILURE}", properties: {on: {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}}}
+              requires: {type: object, description: "REQUIRED for any path a result governs: {on: the question or subject, answer: YES|NO|SUCCESS|FAILURE}", properties: {on: {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}, band: {type: string, enum: ["AND", "BUT"], description: "optional: the result was 'YES, AND' / 'NO, BUT' etc.; it must match"}}}
               because:  {type: string, description: "the cause, in a few words"}
               channel:  {type: string, description: "REQUIRED when the change is something a person or faction learns: how they learned it (witnessed, report, told by ...)"}
         money:  {type: integer, description: "the player's cash change: negative = spent, positive = received"}
@@ -196,7 +202,7 @@ turn:
             required: [who, source]
             properties:
               who:    {type: string, description: "player or an npc id"}
-              source: {type: string, description: "stabilise | minor | standard | strong | T1 | T2 | T3 | T4"}
+              source: {type: string, description: "stabilise | minor | standard | strong | T1 | T2 | T3 | T4 | hour (an hour of rest) | night (a full night)"}
         treat:
           type: array
           description: "real treatment of a lasting injury started or stopped (healer, restoration power, strong healing item, tended rest)"

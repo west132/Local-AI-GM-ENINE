@@ -20,7 +20,7 @@ for d in rows[1:]:
     if not d["ok"]:
         md += [f"**ROUND FAILED:** `{d['error']}`", "", "```", d.get("trace", ""), "```", ""]
         continue
-    md += [f"Sorted as: `{json.dumps(d['sort'], ensure_ascii=False)}`", f"Steps that ran: {', '.join(d['ran'])} · AI calls this round: {d['ai_calls']} · {d['secs']}s", ""]
+    md += [f"Sorted as: `{json.dumps(d['sort'], ensure_ascii=False)}`", f"Steps that ran: {', '.join(d['ran'])} · AI calls this round: {d['ai_calls']} · {d['secs']}s" + (f" · questions rolled: {d['dice_asks']}, settled by the records: {d['settled_asks']}" if 'dice_asks' in d else ""), ""]
     if d["lines"]:
         md += ["**Printed by the program (dice and arithmetic):**", "```"] + d["lines"] + ["```", ""]
     if d.get("halt"):

@@ -408,7 +408,19 @@ class World:
     def location(self) -> dict:
         return self.tree.get("locations", {}).get(self.tree["world_state"]["location"], {})
 
-    def actors_here(self) -> dict[str, dict]:
+    def is_here(self, position) -> bool:
+        """A position is an id or free text ("hiding in relay hut 3 on the disused Canal Street embankment"):
+        it is here if it names this place's id, or shares at least two meaningful words with its name."""
         here = self.tree["world_state"]["location"]
+        pos = str(position or "").lower()
+        if not pos:
+            return False
+        if pos == here.lower() or here.lower() in pos:
+            return True
+        name = str(self.location().get("name", "")).lower()
+        words = {w for w in re.findall(r"[a-z]{4,}", name)}
+        return len(words & set(re.findall(r"[a-z]{4,}", pos))) >= 2
+
+    def actors_here(self) -> dict[str, dict]:
         return {rid: r for rid, r in (self.tree.get("npcs") or {}).items()
-                if isinstance(r, dict) and (r.get("state") or {}).get("position") == here}
+                if isinstance(r, dict) and self.is_here((r.get("state") or {}).get("position"))}

@@ -83,7 +83,8 @@ def main():
             game.log({"input": text, "sort": turn.sort, "lines": turn.lines, "facts": turn.facts, "events": turn.events, "prose": turn.prose})
             game.save()
             rec |= {"ok": True, "sort": turn.sort, "ran": turn.ran, "lines": turn.lines, "facts": turn.facts, "events": turn.events,
-                    "prose": turn.prose, "header_after": header(game.world), "halt": turn.halt}
+                    "prose": turn.prose, "header_after": header(game.world), "halt": turn.halt,
+                    "dice_asks": turn.rolled, "settled_asks": turn.settled}
         except BaseException as e:
             rec |= {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc(limit=3)}
         rec |= {"ai_calls": ai.n - c0, "secs": round(time.time() - t1)}

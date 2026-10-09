@@ -8,7 +8,7 @@ from localgm.store import Game
 from test_flow import Scripted, world, FAST, OK, LOOP_REACT, LOOP_JUDGE, roll_form, force_check, ROOT, HARD
 from test_rules import ByKind, react, run_react
 
-ASK = lambda q, **kw: {"asks": [{"question": q, "likelihood": 0, **kw}]}
+ASK = lambda q, **kw: {"asks": [{"question": q, "obvious": "none", "likelihood": 0, **kw}]}
 
 
 def force_ask(monkeypatch, band):
@@ -271,7 +271,7 @@ class Chaos:
                     "roll": {"subject": sub, "capability": r.choice([-4, 0, 4]), "base": r.randint(1, 20), "committed": r.random() < .5, "governs": r.sample(self.paths, 1),
                              "stakes": {"success": "ok", "failure": "bad", "harm": r.choice(["none", "setback", "loss", "severe"]), "source": r.choice(["light", "man-sized", "x", "hazard-grave"])}}}
         if "asks" in form:
-            return {"asks": [{"question": r.choice(["Does it work?", "What now", "Will they come?"]), "likelihood": r.randint(-3, 3), "for": "f", "governs": r.sample(self.paths, 1)} for _ in range(r.randint(0, 2))]}
+            return {"asks": [{"question": r.choice(["Does it work?", "What now", "Will they come?"]), "obvious": r.choice(["none", "none", "YES - plain", "NO - plain", "maybe"]), "likelihood": r.randint(-3, 3), "for": "f", "governs": r.sample(self.paths, 1)} for _ in range(r.randint(0, 2))]}
         if "minutes" in form:
             return {"minutes": r.choice([0, 5, 30, 200, 1500]), "ops": [self.op() for _ in range(r.randint(0, 4))], "money": r.choice([0, 0, -2, 5, -999]),
                     "rest": r.choice(["none", "none", "rest", "sleep"]), "boundary": r.choice(["none", "training"])}

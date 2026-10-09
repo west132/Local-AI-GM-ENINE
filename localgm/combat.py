@@ -23,7 +23,8 @@ def damage_roll(source: str, rng=None) -> tuple[int, str]:
 def add_foes(world: World, foes: list[dict]) -> None:
     npcs = world.tree.setdefault("npcs", {})
     for f in foes:
-        npcs.setdefault(f["id"], {"name": f["name"], "v": f["v"], "size": f["size"], "state": {}})
+        npcs.setdefault(f["id"], {"name": f["name"], "v": f["v"], "size": f["size"],
+                                  "state": {"position": world.tree["world_state"]["location"], "status": "fighting the player"}})
 
 
 def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str], int]:
@@ -79,6 +80,11 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str], int]:
                              + (" A lasting injury is owed." if h["lasting_injury"] else ""))
                 if h["state"] != "standing":
                     break
+    if out.get("kill"):                  # the player's order is to kill: a downed foe is helpless, so no roll
+        for foe in [f for f in dict.fromkeys(ex["foe"] for ex in out["exchanges"]) if world.state_of(f) == "down"]:
+            h = world.hurt([1], 0, foe)
+            lines.append(f"{foe} was down and helpless; the player finishes it (no roll) — {h['state']}")
+            facts.append(f"The player finished the downed {foe}; it is {h['state']}.")
     if out.get("stop"):
         facts.append(f"Orders stop here: {out['stop']}")
     if downed and lv0 is not None:      # combat XP: each foe overcome, against the level held at the start, summed once

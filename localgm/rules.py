@@ -404,8 +404,10 @@ def heal_target(w: World, who: str, source: str) -> tuple[str, str]:
             raise M.RuleError(f"{who} is not down")
         cond["stable"] = True
         return f"{who} stabilised", f"{who} was stabilised (will not die of the wound)."
-    if source == "strong":
+    if source in ("strong", "night"):
         gain, how = top, "full"
+    elif source == "hour":
+        gain, how = max(1, top // 4), "a quarter"
     elif source in HEAL_DICE:
         n, sides = HEAL_DICE[source]
         d = M.roll(n, sides)
@@ -665,6 +667,8 @@ def op_faults(w: World, ops: list[dict], resolved: dict[str, dict], governs: dic
     out, old = [], past_governed(w)
     for i, op in enumerate(ops, 1):
         path, req = op.get("path", ""), op.get("requires")
+        if op.get("op") == "plan":
+            path += ".plan"                  # a plan changes the actor's plan, not the rest of the actor
         tag = f"op {i} ({path})"
         hit = [k for g, k in governs.items() if path == g or path.startswith(g + ".") or g.startswith(path + ".")]
         if hit and not req:
@@ -676,6 +680,8 @@ def op_faults(w: World, ops: list[dict], resolved: dict[str, dict], governs: dic
                 out.append(f"{tag}: requires {req.get('on')!r}, but nothing with that name was resolved this turn: {sorted(resolved) or 'nothing'}")
             elif (req.get("answer") in ("YES", "SUCCESS")) != r["positive"]:
                 out.append(f"{tag}: depends on {req.get('answer')} but the result was {r['label']}; that change cannot be recorded")
+            elif req.get("band") and f", {req['band']}" not in r["label"]:
+                out.append(f"{tag}: depends on a {req['band']} result but the result was {r['label']}")
         prior = next((e for g, e in old.items() if path == g or path.startswith(g + ".")), None)
         if prior and not req and not str(op.get("because", "")).strip():
             out.append(f"{tag}: this was decided by {prior['key']!r} in round {prior['round']} ({prior['outcome']}); changing it needs a new cause (because) or a new result (requires)")
