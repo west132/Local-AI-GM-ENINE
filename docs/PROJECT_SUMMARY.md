@@ -15,7 +15,7 @@ Turn the V5 text engine (written for web chat) into installable local software w
   clocks, dues, saves; commits all-or-nothing on a copy; freezes resolved results in a ledger so they are not rerolled.
 - Backends: LM Studio / Ollama (OpenAI-style), an in-process .gguf, and a Demo that needs no model. A Windows-style app (Home, Settings, Play,
   rewind, Export/Import save, Make a new world, Check this model) writes `settings.json` itself.
-- 27 rule files, 165 tests, a browser check, an install check, a flow audit (`tools/audit_flows.py`). Install and run steps: `README.md`, `docs/INSTALL.md`.
+- 27 rule files, 167 tests, a browser check, an install check, a flow audit (`tools/audit_flows.py`). Install and run steps: `README.md`, `docs/INSTALL.md`.
 
 ## 3. What we went through
 1. **Port** the V5 turn into an executable form; mechanics checked against V5's helper (`tools/compare_v5.py`).
