@@ -44,7 +44,8 @@ Fights and skill rolls are unchanged (the same two). Rounds 2, 6, 8 and 10 had n
 fewer rolls are in play quality, not tokens.
 
 **Caveats, so the comparison is not read too kindly.**
-- The AI is the same one that played A and had read A's transcript's outcome from memory of the session; decisions are not independent. The dice are.
+- The AI is the same one that played A, and during A2 I opened A's recorded answers several times (rounds 1, 2, 3, 4, 7) to match the form of a reply, so my decisions are
+  not independent of A's and several of A2's answers (fight exchanges, ops shapes) follow A's closely. The dice are independent.
 - Dice differ: A2 Eli's first refusal came out NO, BUT where A had NO, AND. The two runs therefore diverge from round 4.
 - The ten inputs were reconstructed (see above). Input 8 says "take the $350 balance"; in both runs Nadia's counter-offer made the contract
   $200 + $500, so the AI paid the contracted $500 and the input's "$350" was not followed. That is a mismatch in the reconstructed inputs, not an
