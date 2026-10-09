@@ -40,6 +40,9 @@ try:
         check("temperature" in pg.inner_text("body") and json.loads((tmp / "settings.json").read_text())["temperature"] == 0.5, "a bad value is refused with a reason and the old value kept")
         pg.click("#test"); pg.wait_for_function("document.getElementById('t').textContent.length>3")
         check("Demo mode" in pg.inner_text("#t"), "Test the AI button answers")
+        pg.click("#check"); pg.wait_for_function("document.getElementById('chk').innerText.includes('Tells the scene')", timeout=60000)
+        check("/7" in pg.inner_text("#t") and "Weak" in pg.inner_text("#t") or "Not capable" in pg.inner_text("#t") or "Usable" in pg.inner_text("#t"),
+              "Check this model runs and shows a verdict with a row per step")
         pg.click("text=Back to Home")
         check(pg.url.rstrip("/").endswith("8799"), "Back to Home works from Settings")
         pg.fill("input[name=name]", "g1")

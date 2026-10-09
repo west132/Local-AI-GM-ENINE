@@ -10,6 +10,7 @@ A local AI model decides what is possible, what the people in the world do, and 
    - **server**: LM Studio or Ollama. Load a model there, start its server, press *Test the AI*.
    - **gguf**: put a `.gguf` model file in the `models` folder and pick it in the list. (Needs `pip install llama-cpp-python`.)
    - **demo**: no AI; only to look around the app.
+3b. Press **Check this model** in Settings: seven short calls that tell you whether your model can fill the engine's forms, step by step, before you start a game.
 4. On **Home**, make a new game from a bundled world or paste your own BACKGROUND, and play. Every page has Home and Settings links; **Go back to this round** rewinds a game.
 
 ## How it works

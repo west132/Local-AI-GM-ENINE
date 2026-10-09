@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, html, json, pathlib, shutil, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import backend, flow, settings as S
+from . import backend, flow, modelcheck, settings as S
 from .store import Game
 
 HERE = pathlib.Path(__file__).resolve().parent.parent
@@ -126,11 +126,19 @@ def settings_page(msg="", errs=()) -> bytes:
 <label>Temperature (0–2)</label><input name="temperature" type="number" step="0.05" value="{d["temperature"]}">
 <label>Longest single reply (tokens)</label><input name="max_tokens" type="number" value="{d["max_tokens"]}">
 <label>Language</label>{sel("language", S.CHOICES["language"], d["language"])}
-<div class="row" style="margin-top:14px"><button>Save</button><button type="button" class="alt" id="test">Test the AI</button><a class="btn alt" href="/">Back to Home</a></div>
-<p id="t" class="mut"></p></form>
+<div class="row" style="margin-top:14px"><button>Save</button><button type="button" class="alt" id="test">Test the AI</button><button type="button" class="alt" id="check">Check this model (7 short calls)</button><a class="btn alt" href="/">Back to Home</a></div>
+<p id="t" class="mut"></p><div id="chk"></div></form>
 <script>document.getElementById('test').onclick=async()=>{{const f=new FormData(document.querySelector('form'));
 document.getElementById('t').textContent='Testing…';const r=await fetch('/settings/test',{{method:'POST',body:new URLSearchParams(f)}});
-document.getElementById('t').textContent=(await r.json()).message}}</script>'''
+document.getElementById('t').textContent=(await r.json()).message}}
+document.getElementById('check').onclick=async()=>{{const f=new FormData(document.querySelector('form'));
+const t=document.getElementById('t'),box=document.getElementById('chk');box.innerHTML='';
+const r=await fetch('/settings/check',{{method:'POST',body:new URLSearchParams(f)}});if(!r.ok){{t.textContent=await r.text();return}}
+while(true){{const j=await (await fetch('/api/check/status')).json();
+ if(j.state=='running'){{t.textContent='Checking… '+j.step+' ('+j.secs+'s)';await new Promise(x=>setTimeout(x,1500));continue}}
+ if(j.state=='error'){{t.textContent=j.error;return}}
+ const c=j.result.check;t.textContent=c.passed+'/'+c.total+' — '+c.verdict+' ('+c.calls+' calls, '+c.secs+'s)';
+ box.innerHTML='<table style="width:100%;border-collapse:collapse">'+c.rows.map(x=>'<tr><td>'+(x.ok?'✔':'✘')+'</td><td>'+x.name+'</td><td class="mut">'+x.secs+'s'+(x.retried?' · retried':'')+'</td><td class="mut">'+x.note.replace(/</g,'&lt;')+'</td></tr>').join('')+'</table>';return}}}}</script>'''
     return page("Settings", body)
 
 
@@ -232,6 +240,12 @@ class H(BaseHTTPRequestHandler):
             if parts == ["settings"]:
                 errs = APP.settings.update(f)
                 return self.send(settings_page("Saved." if not errs else "", errs))
+            if parts == ["settings", "check"]:
+                for k, v in f.items():
+                    if k in ("backend", "url", "model", "gguf"):
+                        APP.settings.data[k] = v          # check what is on the page; Save is still the player's choice
+                started = APP.start("check", "check", lambda: {"check": modelcheck.run(APP.model(), lambda i, n: APP.job.update(step=n))})
+                return self.json({"started": started}) if started else self.send(b"The AI is busy with another job.", 409, "text/plain")
             if parts == ["settings", "test"]:
                 return self.json({"message": self.test_ai(f)})
             if parts == ["delete"]:
