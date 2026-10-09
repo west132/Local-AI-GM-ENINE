@@ -104,3 +104,25 @@ def test_a_chain_offer_rolls_a_first_child(monkeypatch):
     t = flow.Turn(w, "x")
     flow.h_shape_roll(t, {"new_offer": True})
     assert t.shape == "CHAIN" and any("first child" in l for l in t.lines)
+
+
+def test_a_name_where_an_id_belongs_is_sent_back_not_a_crash():
+    w = world()
+    t, bot = run(w, sort={"kind": "loop", "steps": ["react"]},
+                 react=[{"asks": [], "minutes": 5, "ops": [], "heal": [{"who": "Hobb Marren", "source": "standard"}]},
+                        {"asks": [], "minutes": 5, "ops": [], "heal": [{"who": "hobb_marren", "source": "standard"}]}])
+    assert w.round == 1 and bot.seen.count("react") >= 2          # the first reply was refused with the reason, the second was recorded
+
+
+def test_any_stray_exception_from_a_reply_becomes_a_retry(monkeypatch):
+    w = world()
+    calls = []
+    real = flow.h_commit
+    def flaky(turn, out):
+        calls.append(1)
+        if len(calls) == 1:
+            raise KeyError("Nadia Voss")
+        return real(turn, out)
+    monkeypatch.setitem(flow.HANDLERS, "commit", flaky)
+    t, _ = run(w, sort={"kind": "loop", "steps": ["react"]})
+    assert len(calls) >= 2 and w.round == 1

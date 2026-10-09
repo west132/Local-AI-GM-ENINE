@@ -446,6 +446,8 @@ HEAL_DICE = {"minor": (2, 6), "standard": (4, 6), "T1": (1, 8), "T2": (2, 6), "T
 
 def heal_target(w: World, who: str, source: str) -> tuple[str, str]:
     """Apply a healing item or power. Returns (printed line, fact). Healing stabilises first."""
+    if who != "player" and who not in (w.tree.get("npcs") or {}):
+        raise M.RuleError(f"heal: {who!r} is not 'player' or an npc id ({sorted(w.tree.get('npcs') or {})[:8]}…)")
     _, cond, top = w._vitals(who)
     hp = int(cond.get("hp", top))
     if source == "stabilise":

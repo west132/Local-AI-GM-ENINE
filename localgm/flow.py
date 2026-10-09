@@ -691,6 +691,9 @@ def execute(llm, step: dict, turn: Turn):
             return HANDLERS[step["program"]](turn, out)
         except M.RuleError as e:
             extra = f"\n\nThe program refused your reply: {e}\nReply again, fixed."
+        except (KeyError, IndexError, TypeError, AttributeError, ValueError) as e:      # an id or shape in the answer that the records do not have
+            extra = (f"\n\nThe program could not use your reply: {type(e).__name__}: {e}. Something it names does not exist or has the wrong shape. "
+                     "Use the ids shown in the records (npc ids like nadia_voss, 'player', place ids), not names or descriptions.\nReply again, fixed.")
     turn.facts.append(f"(Step {step['id']} could not be recorded; narrate none of its changes.)")
 
 
