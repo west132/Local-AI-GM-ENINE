@@ -1,11 +1,11 @@
-# Map from NEW ENGINE v5.0 to LOCAL ENGINE v1
+# Map from NEW ENGINE v5.0 to the local engine
 
-The local engine has its own section numbers (1–15). V5 numbers appear only in this file.
-Every V5 section ends up in exactly one of: **AI** (kept in LOCAL_ENGINE.md), **CODE** (the program does it, the AI never sees it), **DROP** (existed only because V5 was written for a web chat).
+The local engine is `engine/steps.yaml` (the turn, in the form the program executes) plus `engine/rules/NN_*.md` (the judgement rules each step loads). Rule files have their own numbers (01–15). V5 numbers appear only in this file.
+Every V5 section ends up in exactly one of: **AI** (kept as a rule file loaded by a step), **CODE** (the program does it, the AI never sees it), **DROP** (existed only because V5 was written for a web chat).
 
 ## A. Local section → V5 source
 
-| Local | Title | Taken from V5 | Changed |
+| Rule file | Title | Taken from V5 | Changed |
 |---|---|---|---|
 | 1 | Your job and the program's job | 1 (Directive), 2 (loop), 6 (ownership) | New. States the split: program rolls/sums/keeps; AI judges/tells. |
 | 2 | Directive | 1 | Tightened. |
@@ -65,7 +65,7 @@ Every V5 section ends up in exactly one of: **AI** (kept in LOCAL_ENGINE.md), **
 
 Measured on the V5 engine text (token estimates, same method on every section):
 
-- AI-owned sections ≈ 11k tokens. This is LOCAL_ENGINE.md.
+- AI-owned sections ≈ 11k tokens. These are engine/rules/.
 - CODE sections ≈ 11k tokens. They stop being prompt text and become program logic.
 - DROP ≈ 1k tokens.
 

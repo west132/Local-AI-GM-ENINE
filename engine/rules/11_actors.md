@@ -1,0 +1,105 @@
+## 11. People and factions
+
+```text
+ACTOR  an NPC or faction; it gets a persistent record only if it recurs or matters; an incidental one has
+  interaction state only
+ACTION = f(identity/role, state, drives, relationships, rights, knowledge, capability, world state)
+REACT  to a material change it perceives; decide independently from its own state (I5, I6)
+PLAN  its next move + a due: a clock time, or a trigger the simulation registers (an event with a committed
+  time, a channel the actor watches; a cycle like a tide needs its schedule as a world fact); else it is not
+  a plan; when the due passes the move resolves wherever the player is, reaching them only by real
+  channels (I5); a recurring plan gets its next due
+OFFSCREEN  an actor otherwise moves only when elapsed time advances an established activity, process, or
+  obligation, or a material event changed its state, knowledge, relationships, rights, risk, or opportunity;
+  time alone never changes personality, loyalty, goals, relationships, or skill
+REPLAN  a plan resolved, blocked, failed, obsolete, or undated → re-plan at once from wants, fears, means,
+  knowledge (I5); never idle while a want is unmet and means exist; if the record is open between fitting
+  moves → an open question: YES pursued (AND sooner/bigger) · NO, BUT weaker/later · NO, AND the next want
+WORK SOURCE  a role that routes work to the player (fixer, guild, employer, patron) → a routine, paced by
+  the BACKGROUND else weekly: an open question "did fitting work come in?" → YES contacts the player ·
+  NO, BUT thin or went to a rival · NO, AND a dry spell
+DIFFICULT NEW ACTOR  when the program says a new actor (not from the BACKGROUND) is difficult, play them so
+  and keep it: rude, greedy, petty, a bully… fitting the role; permanent; never aimed at the player's
+  secrets (I6); their attitude still comes from the meeting
+STANCE  on meeting or being asked, derive it from: the existing relationship, wants, fears, what is asked, its
+  cost to them, what they know of the asker, obligation and authority
+```
+
+Open questions:
+
+```text
+WHEN  the player's own ask (a request, approach, offer, question to an actor; what a place or source holds
+  now: goods, work, news, help), or an actor's replan or work-source check, when the record does not settle
+  it and it matters. Everything else is decided, not rolled: actors from state, norms, canon; fights by the
+  exchange roll + settled morale; news by real channels and travel time (I5); incidents and clocks keep
+  their own rolls.
+1 SETTLE  the record settles it (duty, drive, standing, authority, obvious cost, established fact, setting) →
+  that way, for or against the player, no roll
+  test: would the record settle it the same way if the outcome flipped for the player? no → open
+2 ASK  one yes/no question; the program rolls 2d10 + likelihood (−3..+3); each point is a recorded fact,
+  visible or hidden (shown as "hidden cause"); write both columns ("none" if empty); at most 2 facts per
+  column, both from the same record at the same specificity
+  +2  strong credit, shared loyalty, they need this · common here
+  +1  good impression, fitting interest, introduction · plausible here
+  −1  poor impression, mild cost, wrong affiliation · unusual here
+  −2  grievance, real cost or risk to them, opposed loyalty · rare here
+  +2  canon mode: canon records this outcome, causes unchanged by play
+  attitude = impression ±1, only where no credit/grievance entry counts (I8)
+  the program returns a band:
+  YES, AND  more than asked, within means and authority
+  YES  as asked
+  NO, BUT  partly: less, later, or on their terms (price, condition, favour back); never a smaller free gift
+  NO, AND  refused + the smallest trouble from this actor's state and reach, proportionate (a remark,
+  suspicion, a raised price, a description passed on); never a new obstacle aimed at what the player
+  carries, hides, or plans (I6)
+3 APPLY  the band is the answer; narration never moves it; YES stays within means and authority (section 5);
+  the cost to them is already in the likelihood; it sets this exchange, not the relationship
+```
+
+```text
+INFLUENCE  persuade/deceive/intimidate/bargain is a player action; a roll only when how well it is done is
+  uncertain; a plain ask → no roll; it feeds the answer, never replaces it
+  success +2 likelihood (decisive +3) · failure −2 + its bound cost (offence, lie noticed) · a changed fact
+  (proof, a corrected belief) → settle again
+  it takes one of the two column slots; a failure's bound cost may leave one grievance or belief, which
+  later counts instead of −2, never beside it (I8)
+IDENTITY  actors react to who they believe they deal with (I5); a false name, livery, concealed face, or
+  misattributed reputation → a real reaction to a wrong belief; the belief is recorded on the actor; on
+  correction the reaction changes from then; past acts stand
+STANDING  two records, never one scale: credit (what they know this person did for or with them) · grievance
+  (what they hold against this person); no cancelling; only a real event (restitution, a debt settled, an
+  apology accepted, a grudge outliving its cause) reduces either; it records the OTHER's acts; what an actor
+  did for someone is that actor's own state (feels owed) or a real debt; per relationship, directional;
+  a faction is not its members; it changes when they learn (I5)
+ATTITUDE  current disposition in plain words, mixed where established ("warm but angry"); what the record
+  amounts to, never replacing credit/grievance; a new relationship starts from the first meeting, else neutral;
+  it changes only on a material relationship event (a life saved, betrayal, a lie exposed, a promise kept or
+  broken, humiliation, sacrifice, long shared hardship); greetings, trade, routine talk, expected help change
+  nothing; never recomputed on appearance; it feeds stance, never decides alone
+TIE  what the two are to each other; it changes only when that fact does
+ROMANCE  interested | mutual | established | strained | ended; only once play establishes it; never inferred
+  from warmth, credit, or respect; not for every actor; it overrides no drive, duty, or fear; the player's
+  side is the player's (I4)
+```
+
+```text
+NPC GROWTH  as for the player, no special case; only materially tracked actors (rivals, recurring enemies, named
+  allies); triggered by an established process exposing them to a qualifying challenge (a dangerous trade, an
+  active campaign, a committed teacher), never by time alone or the player's progress (I6); one credit per
+  elapsed period; it stops when the process stops; learning stays; the player learns it only through evidence
+ROUTINES  job + local custom + daylight/season + obligations + circumstances; work, meals, rest, sleep;
+  continuous services in shifts; emergencies break routine; exact schedules only when timing is material
+FAMILIARITY  Round-0 relationships exist before play; familiar actors are not strangers and gain no invented
+  history; a scene needs a person → an existing relationship, affiliation, or institution first, else a
+  setting-valid actor; never a connection manufactured for the protagonist
+CANON MODE  when the world follows a canon: canon is the default course; canon actors follow its plans (the
+  BACKGROUND's canon course, else the source) unless play changed their causes: settled, never rolled; attempts
+  resolve normally; gaps are filled from canon, never invention (I3); your content fits around canon and never
+  replaces a canon actor, place, or event; a beat needing the player never moves them; its actors pursue it
+  with their means; it can pass without the player
+COMPANIONS  joining or leaving needs causal support; no auto-joining; solo stays valid; on joining, settle
+  first: identity, capability, current HP, equipment and consumables, risk drives (caution, pride, when they
+  ask for help, when they withdraw); they act from that record: their own gear by their own judgement; they may
+  ask for help, propose retreat, refuse a reckless order (section 5); the player's property stays the
+  player's; standing permission may cover routine shared supplies
+```
