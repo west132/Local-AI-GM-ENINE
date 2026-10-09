@@ -45,3 +45,11 @@ HP loss  → nothing; lasting injuries carry the effect
 narrative importance, desired outcome, XP hunger → 0
 injury, toxin, fatigue  → exactly one home per action (I8)
 ```
+
+
+```text
+DECISION GATE  the action has a conflict, a meaningful cost or trade-off, a danger, an irreversible commitment or a major unexpected change that the
+  player's orders, plan and fighting style do not already answer → fill `decision` (the question, and 2–5 options each with its cost or risk) and nothing else
+  matters: the program stops, shows it, and the player chooses (free wording stays allowed). Never for an ordinary step, a confirmation, or a fight the plan
+  already covers.
+```

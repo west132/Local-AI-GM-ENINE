@@ -55,7 +55,7 @@ intake:
 turn:
   - id: sort
     when: always
-    rules: [01_jobs, 03_invariants, 05_player_side, 06_sorting, 19_play_lessons]
+    rules: [01_jobs, 02_directive, 03_invariants, 05_player_side, 06_sorting, 19_play_lessons]
     input: [player_who, player_text, place, active_quests, pending]
     output:
       type: object
@@ -74,7 +74,7 @@ turn:
 
   - id: judge
     when: "'judge' in sort.steps"
-    rules: [04_truth, 07_possible, 08_roll_setup, 09_stakes]
+    rules: [02_directive, 04_truth, 07_possible, 08_roll_setup, 09_stakes]
     input: [player_text, place, player_state, records_in_play, results_so_far, resolved_facts]
     output:
       type: object
@@ -114,7 +114,7 @@ turn:
                 harm:    {type: string, enum: [none, setback, loss, severe]}
                 source:  {type: string, description: "when harm is loss or severe: what hurts (unarmed|light|one-handed|two-handed|bow|small|man-sized|large|huge|hazard-light|hazard-serious|hazard-grave|T1|T2|T3|T4)"}
                 soak:    {type: integer, minimum: 0, maximum: 2}
-        decision: {type: object, description: "set only when the decision gate fires", properties: {question: {type: string}, options: {type: array}}}
+        decision: {type: object, required: [question, options], description: "set only when the decision gate fires (the player's own orders do not answer it): the program stops here and shows it; nothing is rolled", properties: {question: {type: string, minLength: 5}, options: {type: array, minItems: 2, maxItems: 5, items: {type: string}, description: "each option with its cost or risk"}}}
     program: roll
 
   - id: fight
@@ -158,7 +158,7 @@ turn:
   # A: the AI says what is uncertain. Nothing is committed. B: the program rolls it.
   - id: wonder
     when: "'react' in sort.steps"
-    rules: [11_actors, 19_play_lessons]
+    rules: [02_directive, 11_actors, 19_play_lessons]
     input: [place, actors_present, dues_fired, player_text, results_so_far, resolved_facts]
     output:
       type: object
@@ -172,7 +172,7 @@ turn:
   # C: the AI is told the results and says what follows from them. D: the program validates and commits, all or nothing.
   - id: react
     when: "'react' in sort.steps"
-    rules: [11_actors, 12_world, 19_play_lessons]
+    rules: [02_directive, 11_actors, 12_world, 19_play_lessons]
     input: [place, actors_present, dues_fired, pressures, player_text, results_so_far, resolved_facts]
     output:
       type: object
@@ -195,7 +195,7 @@ turn:
               path:  {type: string}
               value: {}
               due_in_minutes: {type: integer, minimum: 0}
-              requires: {type: object, description: "REQUIRED for any path a result governs: {on: the question or subject, answer: YES|NO|SUCCESS|FAILURE}", properties: {on: {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}, band: {type: string, enum: ["AND", "BUT"], description: "optional: the result was 'YES, AND' / 'NO, BUT' etc.; it must match"}}}
+              requires: {type: object, description: "REQUIRED for any path a result governs: {on: the question or subject, answer: YES|NO|SUCCESS|FAILURE}", properties: {"on": {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}, band: {type: string, enum: ["AND", "BUT"], description: "optional: the result was 'YES, AND' / 'NO, BUT' etc.; it must match"}}}
               because:  {type: string, description: "the cause, in a few words"}
               channel:  {type: string, description: "REQUIRED when the change is something a person or faction learns: how they learned it (witnessed, report, told by ...)"}
         money:  {type: integer, description: "the player's cash change: negative = spent, positive = received"}
@@ -338,7 +338,7 @@ turn:
               path:    {type: string}
               value:   {}
               because: {type: string, description: "the record that shows it is settled"}
-              requires: {type: object, properties: {on: {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}}}
+              requires: {type: object, properties: {"on": {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}}}
         notes: {type: array, items: {type: string}, description: "open items you left open, and why"}
     program: commit_ops
 

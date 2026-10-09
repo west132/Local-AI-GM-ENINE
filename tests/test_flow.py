@@ -420,3 +420,15 @@ def test_arrays_in_a_form_have_a_length_limit():
     sch = flow.load_steps()[0]["output"]
     capped = schema.cap_arrays(sch)
     assert capped["properties"]["steps"]["maxItems"] == 6 and "maxItems" not in sch["properties"]["steps"]
+
+
+def test_the_decision_gate_stops_the_turn_and_shows_the_options_without_rolling(monkeypatch):
+    rolled = []
+    monkeypatch.setattr(M, "check", lambda *a, **k: rolled.append(1))
+    w = world()
+    before = w.round
+    t = flow.run_turn(w, Scripted([LOOP_JUDGE, {"verdict": "certain", "cites": ["player"],
+                                                 "decision": {"question": "The ferry leaves now. Which way do you go?",
+                                                              "options": ["Take the ferry (leaves the envelope undelivered)", "Stay and deliver it (miss the ferry)"]}}]),
+                      "I go")
+    assert t.halt and "1. Take the ferry" in t.prose and "2. Stay and deliver" in t.prose and not rolled

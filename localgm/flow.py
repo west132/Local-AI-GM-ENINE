@@ -265,6 +265,13 @@ def _bind(turn: Turn, key: str, e: dict, governs: list[str]) -> None:
 
 
 def h_roll(turn: Turn, out: dict):
+    dec = out.get("decision")
+    if dec and str(dec.get("question", "")).strip():      # the decision gate: the player decides, nothing is rolled or recorded
+        turn.halt = True
+        turn.prose = (dec["question"].strip() + "\n" + "\n".join(f"{i}. {o}" for i, o in enumerate(dec["options"], 1))
+                      + "\n(Nothing has happened yet. Say what you do; you are not limited to these.)")
+        turn.world.tree.pop("pending", None)
+        return
     if out["verdict"] == "ask":              # the setup depends on answers the AI does not have yet
         if not out.get("asks"):
             raise M.RuleError("verdict 'ask' needs the questions in 'asks'")
