@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, html, json, pathlib, shutil, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import backend, flow, modelcheck, savefile, settings as S
+from . import backend, flow, generate, modelcheck, savefile, settings as S
 from .store import Game
 
 HERE = pathlib.Path(__file__).resolve().parent.parent
@@ -77,8 +77,14 @@ class App:
         return out
 
     def worlds(self) -> list[str]:
-        d = HERE / "examples"
-        return sorted(p.parent.name for p in d.glob("*/background.md"))
+        return sorted({p.parent.name for d in (HERE / "examples", self.root / "worlds") for p in d.glob("*/background.md")})
+
+    def world_text(self, w: str) -> str:
+        w = pathlib.Path(w).name
+        for d in (self.root / "worlds", HERE / "examples"):
+            if (d / w / "background.md").is_file():
+                return (d / w / "background.md").read_text(encoding="utf-8")
+        raise FileNotFoundError(w)
 
     def open(self, name: str) -> Game:
         return Game.open(self.settings.saves, name)
@@ -106,6 +112,10 @@ def home() -> bytes:
 <div id="paste" hidden><label>BACKGROUND text</label><textarea name="background" rows="8"></textarea></div>
 <p class="mut">AI: {html.escape(where)} — change it in <a href="/settings">Settings</a>.</p><button>Start</button></form>
 <script>const s=document.querySelector('select[name=world]');s.onchange=()=>document.getElementById('paste').hidden=s.value!='__paste'</script>
+<h1>Make a new world</h1><form class="card" method="post" action="/generate">
+<p class="mut">Say what you want in a few lines — a setting, a game it comes from, who you play. The AI fills the forms; the program checks every one.</p>
+<textarea name="idea" id="idea" rows="3" required placeholder="e.g. Skyrim, start as a Nord thief in Riften, low magic, long main story"></textarea>
+<button>Make this world</button></form>
 <h1>Continue from a save file</h1><form class="card" method="post" action="/import">
 <p class="mut">A SAVE file made in a chat (or exported here). Choose the world it belongs to.</p>
 <label>Game name</label><input name="name" required pattern="[A-Za-z0-9_\\-]+" placeholder="my_game_r10">
@@ -186,6 +196,19 @@ poll();
     return page(name, body)
 
 
+def making_page() -> bytes:
+    names = [s["id"] for s in generate.stages()]
+    body = f'''<h1>Making a world</h1><div class="card"><p id="st">Starting…</p><p id="end"></p></div>
+<script>const $=id=>document.getElementById(id),S={json.dumps(names)};
+function esc(s){{return s.replace(/[&<>]/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;'}}[c]))}}
+async function poll(){{const r=await (await fetch('/api/world/status')).json();
+ if(r.state=='running'){{const i=S.indexOf(r.step);$('st').textContent='Filling the '+(r.step||'first')+' form'+(i>=0?' ('+(i+1)+' of '+S.length+')':'')+' — '+r.secs+'s';setTimeout(poll,1500);return}}
+ if(r.state=='error'){{$('st').innerHTML='<span class="bad">'+esc(r.error)+'</span>';$('end').innerHTML='<a class="btn" href="/">Home</a>';return}}
+ $('st').textContent='Done. The world is called '+r.result.world+' and is in the World list on Home.';$('end').innerHTML='<a class="btn" href="/">Home</a>'}}
+poll();</script>'''
+    return page("Making a world", body)
+
+
 def header(w) -> str:
     from .__main__ import header as h
     return h(w)
@@ -229,6 +252,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(home())
             if parts == ["settings"]:
                 return self.send(settings_page())
+            if parts == ["making"]:
+                return self.send(making_page())
             if parts[0] == "play" and len(parts) == 2:
                 return self.send(play_page(parts[1]))
             if parts[0] == "export" and len(parts) == 2:
@@ -269,6 +294,8 @@ class H(BaseHTTPRequestHandler):
                 return self.new_game(f)
             if parts == ["import"]:
                 return self.import_game(f)
+            if parts == ["generate"]:
+                return self.make_world(f)
             if parts[0] == "api" and len(parts) == 3:
                 name = parts[1]
                 if parts[2] == "turn":
@@ -304,7 +331,7 @@ class H(BaseHTTPRequestHandler):
         if f.get("world") == "__paste":
             text = f.get("background", "")
         else:
-            text = (HERE / "examples" / pathlib.Path(f["world"]).name / "background.md").read_text(encoding="utf-8")
+            text = APP.world_text(f["world"])
         g = Game.new(APP.settings.saves, name, text)
 
         def setup():
@@ -318,7 +345,7 @@ class H(BaseHTTPRequestHandler):
     def import_game(self, f):
         name = pathlib.Path(f["name"]).name
         bg = f.get("background", "") if f.get("world") == "__paste" else \
-            (HERE / "examples" / pathlib.Path(f["world"]).name / "background.md").read_text(encoding="utf-8")
+            APP.world_text(f["world"])
         try:
             world, notes = savefile.import_save(f["save"], bg)
         except Exception as e:
@@ -332,6 +359,22 @@ class H(BaseHTTPRequestHandler):
                 return {"reload": True}
             APP.start(name, "intake", setup)
         self.redirect(f"/play/{urllib.parse.quote(name)}")
+
+    def make_world(self, f):
+        idea = f.get("idea", "").strip()
+        if not idea:
+            return self.send(b"say what the world is", 400, "text/plain")
+
+        def run():
+            generate.on_stage = lambda sid: APP.job.update(step=sid)
+            try:
+                text, _ = generate.generate(APP.model(), idea)
+            finally:
+                generate.on_stage = None
+            return {"world": generate.save_world(APP.root, text)}
+        if not APP.start("world", "generate", run):
+            return self.send(page("Busy", '<p>The AI is busy with another job. <a href="/">Home</a></p>'), 409)
+        self.redirect("/making")
 
     def turn(self, name: str, text: str):
         if not text:

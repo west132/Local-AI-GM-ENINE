@@ -1,5 +1,6 @@
 """Where the AI lives. Both backends expose ask(system, user, schema) -> dict | str."""
 from __future__ import annotations
+import copy
 import json, re, urllib.request
 
 _THINK = re.compile(r"<think>.*?</think>", re.S)
@@ -58,6 +59,11 @@ class Demo:
         if schema is None:
             return "(demo) " + user.split("PLAYER:")[-1].split("\n")[0].strip()[:120]
         props = schema.get("properties", {})
+        from . import demo_forms as D
+        for field, key in (("title", "premise"), ("groups", "economy"), ("source_abilities", "player"),
+                           ("start_location", "places"), ("npcs", "cast"), ("quests", "story")):
+            if field in props and "required" in schema and field in schema["required"]:
+                return copy.deepcopy(D.GOOD[key])
         if "kind" in props:
             return {"kind": "fast", "steps": []}
         if "ok" in props:
