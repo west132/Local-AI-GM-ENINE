@@ -316,6 +316,8 @@ def h_roll(turn: Turn, out: dict):
         turn.facts.append(f"IMPOSSIBLE: {out.get('reason', '')}")
         return
     if out["verdict"] == "certain":
+        if str(out.get("reason") or "").strip():        # the judge's reason is part of what the next call must know
+            turn.results.append(f"SETTLED (no roll): {out['reason'].strip()}")
         return
     r = out.get("roll")
     if not r:
@@ -643,7 +645,7 @@ def h_record_injury(turn: Turn, out: dict):
         inj.append({"injury": out["injury"], "home": out["home"], "effect": out["effect"]})
         break
     turn.injury_owed = 0
-    turn.facts.append(f"The player now has a lasting injury: {out['injury']}.")
+    turn.facts.append(f"The player now has a lasting injury: {out['injury']} ({out['effect'].strip()}).")
 
 
 def h_ending(turn: Turn, out: dict):

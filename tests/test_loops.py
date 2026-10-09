@@ -218,3 +218,11 @@ def test_how_many_ai_calls_a_turn_needs():
     ask = {"asks": [{"question": "Does he agree?", "obvious": "none", "likelihood": 0}]}
     assert calls({"kind": "loop", "steps": ["react"]}, react=[ask, {"asks": [], "report": "Hobb nods.", "minutes": 5, "ops": []}]) == ["sort", "react", "react", "tell"]
     assert calls({"kind": "loop", "steps": ["judge", "react"]}, judge=roll_form(committed=True), react={"asks": [], "report": "It works.", "minutes": 5, "ops": []}) == ["sort", "judge", "react", "tell"]
+
+
+def test_the_judges_reason_for_a_settled_action_is_handed_on():
+    w = world()
+    t, _ = run(w, sort={"kind": "loop", "steps": ["judge", "react"]},
+               judge={"verdict": "certain", "cites": ["player"], "reason": "A trained courier opens an unlocked door."},
+               react={"asks": [], "report": "The door opens.", "minutes": 1, "ops": []})
+    assert any("SETTLED (no roll): A trained courier" in r for r in t.results)
