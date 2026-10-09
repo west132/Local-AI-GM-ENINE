@@ -79,7 +79,11 @@ def ask_ai(llm, step: dict, turn: Turn, extra: str = ""):
 def run_step(llm, step: dict, turn: Turn, extra: str = ""):
     """Ask; validate against the form; one retry that lists the faults."""
     for _ in range(2):
-        out = ask_ai(llm, step, turn, extra)
+        try:
+            out = ask_ai(llm, step, turn, extra)
+        except ValueError as e:      # the reply was not JSON at all
+            errs, extra = [f"not valid JSON ({e})"], extra + "\n\nYour last reply was not valid JSON. Reply with the JSON object only."
+            continue
         if step["output"].get("type") == "string":
             return str(out).strip()
         errs = schema.validate(out, step["output"])
