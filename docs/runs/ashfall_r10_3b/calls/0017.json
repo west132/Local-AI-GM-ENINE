@@ -1,0 +1,12 @@
+{
+ "n": 17,
+ "system_id": "05de5aa6",
+ "user": "PLACE: Hale Workshop, Morrow Ward — {\"access\": \"Rin rents the street-level workshop and back room; a hand-painted sign says RECOVERY & ODD JOBS\", \"public_surface\": \"ordinary mixed commercial block; landlady upstairs\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"closing; Nadia Voss at the counter with a folder; the phone has one message from Pike\"}\nTIME: 2026-10-06 19:40, evening\nPERSON nadia_voss: {\"name\": \"Nadia Voss\", \"job\": \"restaurant shift manager\", \"gender\": \"woman\", \"character\": \"blunt, funny when exhausted, keeps lists, hates being handled; pays her debts to the cent\", \"doing\": \"asking Rin to find her brother\"}\n\nTEXT TO CHECK:\nI take Nadia's case at $700 flat, $350 up front. I ask her to show me the phone locator and I keep Eli's map with the Red Spur circled.\n\nFACTS (tell exactly these):\n",
+ "reply": {
+  "ok": true
+ },
+ "error": null,
+ "secs": 22.4,
+ "max_tokens": null,
+ "wants": "json"
+}

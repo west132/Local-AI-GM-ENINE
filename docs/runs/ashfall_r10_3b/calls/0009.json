@@ -1,0 +1,84 @@
+{
+ "n": 9,
+ "system_id": "3888ebdb",
+ "user": "\n\nTODAY: 2026-10-06 at 19:40 (day_offset 0)\n\nnpcs.lina_dalen: move='ask dispatch about his shifts; seek a clinic appointment; speak to a serious investigator if public trouble starts or she finds similar charm cases' | note='2026-10-07 07:30 first contact with dispatch and possible clinic; earlier if Imran goes missing or his condition suddenly changes'\nnpcs.l_warren: move=\"collect the cell's payment and move the remaining cache to an agreed courier without attracting attention; when evidence of a creature or police scrutiny makes this too dangerous, seek a safer deal or abandon the stock\" | note='2026-10-08 22:00 agreed collection at Suds & Spin; earlier on a real hazard, visit or loss of access'\nnpcs.court_runner: move=\"at the next low-water window carry a brief status token through the damaged bleed-drain to the Mercer sump, then reach the Southport outlet or Orin's arranged watcher if the route remains physically open\" | note='2026-10-08 04:00 low-water window, then each window after (mercer_pump.low_water); if pump flow or grate blocks passage, retreat and replan after observing actual conditions'\nactive_world_pressures.glass_spread: clock 'Lowfield hollowing' | pace='every 4 days while someone continues wearing contaminated glass or new stock actually circulates; repairs, isolation and destroyed stock may halt or reverse exposure' | first check='2026-10-10 19:40'",
+ "reply": {
+  "actors": [
+   {
+    "id": "npcs.lina_dalen",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "2026-10-07 07:30",
+      "what": "ask dispatch about his shifts; seek a clinic appointment; speak to a serious investigator if public trouble starts or she finds similar charm cases"
+     },
+     {
+      "day_offset": 0,
+      "at": "2026-10-06 19:40",
+      "what": "move='ask dispatch about his shifts; seek a clinic appointment; speak to a serious investigator if public trouble starts or she finds similar charm cases'"
+     }
+    ],
+    "triggers": [
+     "when Imran goes missing or his condition suddenly changes"
+    ],
+    "interval_minutes": 1440
+   },
+   {
+    "id": "npcs.l_warren",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "2026-10-08 22:00",
+      "what": "collect the cell's payment and move the remaining cache to an agreed courier without attracting attention; when evidence of a creature or police scrutiny makes this too dangerous, seek a safer deal or abandon the stock"
+     },
+     {
+      "day_offset": 0,
+      "at": "2026-10-06 19:40",
+      "what": "move='collect the cell's payment and move the remaining cache to an agreed courier without attracting attention; when evidence of a creature or police scrutiny makes this too dangerous, seek a safer deal or abandon the stock'"
+     }
+    ],
+    "triggers": [
+     "when evidence of a creature or police scrutiny makes this too dangerous"
+    ],
+    "interval_minutes": 1440
+   },
+   {
+    "id": "npcs.court_runner",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "2026-10-08 04:00",
+      "what": "at the next low-water window carry a brief status token through the damaged bleed-drain to the Mercer sump, then reach the Southport outlet or Orin's arranged watcher if the route remains physically open"
+     },
+     {
+      "day_offset": 0,
+      "at": "2026-10-06 19:40",
+      "what": "move='at the next low-water window carry a brief status token through the damaged bleed-drain to the Mercer sump, then reach the Southport outlet or Orin's arranged watcher if the route remains physically open'"
+     }
+    ],
+    "triggers": [
+     "if pump flow or grate blocks passage, retreat and replan after observing actual conditions"
+    ],
+    "interval_minutes": 1440
+   },
+   {
+    "id": "active_world_pressures.glass_spread",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "2026-10-10 19:40",
+      "what": "Lowfield hollowing"
+     }
+    ],
+    "triggers": [
+     "someone continues wearing contaminated glass or new stock actually circulates; repairs, isolation and destroyed stock may halt or reverse exposure"
+    ],
+    "interval_minutes": 1440
+   }
+  ]
+ },
+ "error": null,
+ "secs": 150.7,
+ "max_tokens": null,
+ "wants": "json"
+}

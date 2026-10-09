@@ -1,0 +1,12 @@
+{
+ "n": 23,
+ "system_id": "05de5aa6",
+ "user": "PLACE: Hale Workshop, Morrow Ward — {\"access\": \"Rin rents the street-level workshop and back room; a hand-painted sign says RECOVERY & ODD JOBS\", \"public_surface\": \"ordinary mixed commercial block; landlady upstairs\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"closing; Nadia Voss at the counter with a folder; the phone has one message from Pike\"}\nTIME: 2026-10-06 19:40, evening\nPERSON nadia_voss: {\"name\": \"Nadia Voss\", \"job\": \"restaurant shift manager\", \"gender\": \"woman\", \"character\": \"blunt, funny when exhausted, keeps lists, hates being handled; pays her debts to the cent\", \"doing\": \"asking Rin to find her brother\"}\n\nTEXT TO CHECK:\nNadia Voss looks up from her folder, her eyes narrowing. \"Who are you?\" she asks, her voice steady despite the rain.\n\nYou step forward, your weapon raised. \"I'm here to find my brother,\" you say, your voice firm. \"I saw a creature watching me from the weeds.\"\n\nNadia Voss raises her hand, her eyes narrowing. \"I know who you are,\" she says. \"You're a thief, and you're not welcome here.\"\n\nYou raise your weapon again. \"I'm not a thief,\" you say. \"I'm here to find my brother.\"\n\nNadia Voss raises her hand again.\n\nFACTS (tell exactly these):\n",
+ "reply": {
+  "ok": true
+ },
+ "error": null,
+ "secs": 23.9,
+ "max_tokens": null,
+ "wants": "json"
+}

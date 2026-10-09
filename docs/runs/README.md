@@ -61,3 +61,17 @@ fewer rolls are in play quality, not tokens.
    Not changed: it is the sorter's judgement, and the ten-round check is the safety net (in this run nothing was left to close at round 10).
 
 Files are laid out like run A: `TRANSCRIPT.md`, `calls/NNNN.json`, `systems/`, `rounds.jsonl`.
+
+## Run B — a 3B coding model as the AI (`ashfall_r10_3b/`) — stopped early, partial
+
+The only model available in the sandbox was a 3B coding model (Qwen2.5-Coder-3B, q4, CPU). It was given the same world and the same ten inputs
+on the engine as it stood when the run began (before the A2 fixes). **The run did not finish:** the container was restarted while it was
+working on input 8, so it covers inputs 1–7 (attempts 1–7 of the log). Nothing was edited. Files: `TRANSCRIPT.md`, `calls/`, `systems/`, `rounds.jsonl`.
+
+What the data shows, no more:
+- 4 of the 7 attempted inputs were accepted by the program (rounds R1–R4); 3 were refused and rolled back whole (`ok: false`), each because the sort step
+  returned text that was not valid JSON. A refused round changes nothing, so the game stayed consistent, but the 3B model could not carry a turn
+  reliably.
+- It is slow on CPU: 7–12 minutes per attempted input.
+- The header shows time stuck at 19:40 after four accepted rounds: the model did not advance the clock.
+- This says the program survives a weak model without corrupting state. It says nothing about how a 14B or larger model will play; that is still untested.

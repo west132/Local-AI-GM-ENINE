@@ -1,0 +1,10 @@
+{
+ "n": 33,
+ "system_id": "20e62ddb",
+ "user": "PLACE: Hale Workshop, Morrow Ward — {\"access\": \"Rin rents the street-level workshop and back room; a hand-painted sign says RECOVERY & ODD JOBS\", \"public_surface\": \"ordinary mixed commercial block; landlady upstairs\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"closing; Nadia Voss at the counter with a folder; the phone has one message from Pike\"}\nTIME: 2026-10-06 19:40, evening\nPERSON nadia_voss: {\"name\": \"Nadia Voss\", \"job\": \"restaurant shift manager\", \"gender\": \"woman\", \"character\": \"blunt, funny when exhausted, keeps lists, hates being handled; pays her debts to the cent\", \"doing\": \"asking Rin to find her brother\"}\n\nFACTS (tell exactly these):\n\n\nPLAYER: At the workshop I try to sense the shard's resonance through plastic, cardboard, glass and a steel tin, then leave it in the tin on the shelf.",
+ "reply": "At the Hale Workshop, Morrow Ward, Nadia Voss, the restaurant shift manager, is at the counter with a folder. The phone has one message from Pike. Nadia is asking Rin to find her brother. The workshop is closing. Nadia is trying to sense the shard's resonance through plastic, cardboard, glass, and a steel tin. She leaves it in the tin on the shelf.",
+ "error": null,
+ "secs": 23.5,
+ "max_tokens": 500,
+ "wants": "text"
+}

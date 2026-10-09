@@ -1,0 +1,41 @@
+{
+ "n": 13,
+ "system_id": "3888ebdb",
+ "user": "\n\nTODAY: 2026-10-06 at 19:40 (day_offset 0)\n\nactive_world_pressures.seal_erosion: clock 'seal erosion' | pace='every 2 weeks while actual extraction or deliberate below-seam damage continues; otherwise every 1 month from load cycling only if the pre-existing crack remains unrepaired and mechanically stressed. Never apply both modes in one interval; proven stabilization halts it.' | first check='2026-10-20 04:00'\nactive_world_pressures.eli_condition: clock 'Eli's nights' | pace='every night Eli spends alone in the hut' | first check='2026-10-07 04:00'\nFix these and answer for ONLY the items still listed:\n- active_world_pressures.seal_erosion\n- active_world_pressures.eli_condition\n- active_world_pressures.seal_erosion: time '2026-10-20 04:00': use HH:MM or one of ['afternoon', 'dawn', 'dusk', 'evening', 'midday', 'midnight', 'morning', 'night', 'noon']\n- active_world_pressures.eli_condition: time '2026-10-07 04:00': use HH:MM or one of ['afternoon', 'dawn', 'dusk', 'evening', 'midday', 'midnight', 'morning', 'night', 'noon']",
+ "reply": {
+  "actors": [
+   {
+    "id": "active_world_pressures.seal_erosion",
+    "dues": [
+     {
+      "day_offset": 0,
+      "at": "2026-10-20 04:00",
+      "what": "seal erosion"
+     }
+    ],
+    "triggers": [
+     "every 2 weeks while actual extraction or deliberate below-seam damage continues; otherwise every 1 month from load cycling only if the pre-existing crack remains unrepaired and mechanically stressed. Never apply both modes in one interval; proven stabilization halts it."
+    ],
+    "interval_minutes": 10080
+   },
+   {
+    "id": "active_world_pressures.eli_condition",
+    "dues": [
+     {
+      "day_offset": 0,
+      "at": "2026-10-07 04:00",
+      "what": "Eli's nights"
+     }
+    ],
+    "triggers": [
+     "every night Eli spends alone in the hut"
+    ],
+    "interval_minutes": 10080
+   }
+  ]
+ },
+ "error": null,
+ "secs": 47.1,
+ "max_tokens": null,
+ "wants": "json"
+}
