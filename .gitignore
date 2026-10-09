@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 saves/
 runs/out_*/saves/
+runs/*.log
+runs/out_*/
