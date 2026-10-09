@@ -13,6 +13,10 @@ def load_steps() -> list[dict]:
     return yaml.safe_load((ENGINE / "steps.yaml").read_text(encoding="utf-8"))["turn"]
 
 
+def load_intake() -> dict:
+    return yaml.safe_load((ENGINE / "steps.yaml").read_text(encoding="utf-8"))["intake"]
+
+
 def rules_text(names: list[str]) -> str:
     return "\n\n".join((ENGINE / "rules" / f"{n}.md").read_text(encoding="utf-8") for n in names)
 
@@ -82,7 +86,8 @@ def inputs(step: dict, turn: Turn) -> str:
         elif name == "prose":
             parts.append("TEXT TO CHECK:\n" + turn.prose)
         elif name == "dues_fired":
-            parts.append("DUE NOW: " + json.dumps([{"who": p_, **pl} for p_, pl in w.due()], ensure_ascii=False))
+            parts.append("DUE NOW (their time has come; each resolves wherever the player is): "
+                         + json.dumps([{"who": p_, "what": d["what"]} for p_, d in w.due()], ensure_ascii=False))
         elif name in ("time", "pressures", "plan", "morale_norms"):
             pass     # time is inside the scene; pressures and norms are added when those records exist
         else:
@@ -157,7 +162,10 @@ def do_apply(turn: Turn, out: dict) -> list[str]:
         turn.lines.append(f"ask 2d10: {d1}+{d2} {r['likelihood']:+d} = {r['total']} → {r['band']} ({a['question']})")
         turn.facts.append(f"QUESTION '{a['question']}' → {r['band']}")
     refused = apply_ops(w, out["ops"])
+    fired = w.due()
     days = w.advance(int(out["minutes"]))
+    for path, d in fired:           # the AI saw these dues this turn; they are spent
+        w.clear_due(path, d)
     if days:
         turn.facts.append(f"{days} midnight(s) passed")
     return refused
@@ -165,6 +173,34 @@ def do_apply(turn: Turn, out: dict) -> list[str]:
 
 def clean(prose: str) -> str:
     return re.sub(r"^```\w*\s*|\s*```$", "", prose.strip()).strip()
+
+
+def intake(world: World, llm, batch: int = 4) -> None:
+    """Once per new game: the AI splits each actor's plan note into dues and triggers; the program stores them."""
+    step = load_intake()
+    t = world.time
+    for i in range(0, len(todo := world.needs_intake()), batch):
+        paths = todo[i:i + batch]
+        notes = "\n".join(f"{p}: move={world.get(p + '.plan.move')!r} | note={world.get(p + '.plan.text') or '(none given)'!r}" for p in paths)
+        extra = f"TODAY: {t.get('date')} at {t['clock_minutes'] // 60:02d}:{t['clock_minutes'] % 60:02d} (day_offset 0)\n\n{notes}"
+        problems = ""
+        for _ in range(3):
+            out = run_step(llm, {**step, "input": []}, Turn(world, ""), "\n\n" + extra + problems)
+            problems = ""
+            for a in out["actors"]:
+                if a["id"] not in paths:
+                    continue
+                try:
+                    world.set_dues(a["id"], a["dues"], a["triggers"])
+                except (ValueError, KeyError) as e:
+                    problems += f"\n- {a['id']}: {e}"
+            left = [p for p in paths if p in world.needs_intake()]
+            if not left:
+                break
+            problems = "\nFix these and answer for ONLY the actors still listed:\n" + "\n".join(f"- {p}" for p in left) + problems
+        else:
+            for p in left:      # keep the note as a trigger rather than lose it
+                plan = world.get(p + ".plan"); plan["triggers"].append(plan.pop("text", None) or "re-plan at once")
 
 
 def run_turn(world: World, llm, text: str) -> Turn:

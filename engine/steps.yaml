@@ -4,6 +4,34 @@
 # The AI never rolls, adds, keeps time or writes a save; it only fills `output`.
 # Rule files live in engine/rules/ (own numbering, see docs/MAP_FROM_V5.md).
 
+# Run once when a game starts (flow.intake), not every turn.
+intake:
+  id: intake
+  rules: [16_intake]
+  input: [today, plan_notes]
+  output:
+    type: object
+    required: [actors]
+    properties:
+      actors:
+        type: array
+        items:
+          type: object
+          required: [id, dues, triggers]
+          properties:
+            id: {type: string}
+            dues:
+              type: array
+              items:
+                type: object
+                required: [day_offset, at, what]
+                properties:
+                  day_offset: {type: integer, minimum: 0, maximum: 400}
+                  at: {type: string}
+                  what: {type: string}
+            triggers: {type: array, items: {type: string}}
+  program: set_dues
+
 turn:
   - id: sort
     when: always

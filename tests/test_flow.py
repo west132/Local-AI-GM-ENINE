@@ -4,7 +4,7 @@ from localgm import flow, mechanics as M
 from localgm.state import World, background_tree, WriteRefused
 import pytest
 
-BG = pathlib.Path("/home/user/Claude-Engine-V5/examples/harbour_guesthouse/background.md")
+BG = pathlib.Path(__file__).resolve().parent.parent / "examples/harbour_guesthouse/background.md"
 
 
 class Scripted:
@@ -27,7 +27,7 @@ def test_ai_cannot_write_owned_paths():
 
 def test_plan_gets_absolute_due_and_fires_in_order():
     w = world()
-    assert w.tree["npcs"]["edda_pryce"]["plan"]["due_clock"] == 1020      # BACKGROUND's "17:00" became a real due
+    assert w.tree["npcs"]["edda_pryce"]["plan"]["dues"][0]["clock"] == 1020      # BACKGROUND's "17:00" became a real due
     w.apply({"op": "plan", "path": "npcs.hobb_marren", "value": "opens the shutters", "due_in_minutes": 90})
     w.apply({"op": "plan", "path": "npcs.tobias_wren", "value": "leaves", "due_in_minutes": 30})
     assert w.due() == []
@@ -98,3 +98,36 @@ def test_ai_unknown_damage_source_is_refused():
     from localgm import combat
     with pytest.raises(M.RuleError):
         combat.damage_roll("laser")
+
+
+HARD = ["ashfall_hunter", "cyberpunk_red_south_nc", "last_scion_boundary", "tarnstead_low_fantasy"]
+ROOT = pathlib.Path(__file__).resolve().parent.parent / "examples"
+
+
+@pytest.mark.parametrize("name", HARD)
+def test_hard_backgrounds_load_and_every_unparsed_plan_goes_to_intake(name):
+    w = World(background_tree((ROOT / name / "background.md").read_text()))
+    assert w.actors_here()
+    todo = w.needs_intake()
+    for kind in ("npcs", "factions"):
+        for rid, r in (w.tree.get(kind) or {}).items():
+            p = (r.get("plan") or {}) if isinstance(r, dict) else {}
+            assert p.get("dues") or p.get("text") or not p or r["plan"] in [w.get(x + ".plan") for x in todo]   # nothing silently dropped
+    assert len(flow.scene(w, True)) < 8000
+    assert isinstance(todo, list)
+
+
+def test_intake_sets_dues_and_refuses_the_past():
+    w = World(background_tree((ROOT / "tarnstead_low_fantasy" / "background.md").read_text()))
+    todo = w.needs_intake()
+    first = todo[:4]
+    for p in todo[4:]:
+        w.get(p + ".plan").pop("text", None); w.get(p + ".plan")["triggers"] = ["x"]
+    good = {"actors": [{"id": p, "dues": [{"day_offset": 1, "at": "dawn", "what": "patrol"}], "triggers": ["immediately if the watch closes"]} for p in first]}
+    bad = {"actors": [{"id": p, "dues": [{"day_offset": 0, "at": "00:10", "what": "past"}], "triggers": []} for p in first]}
+    llm = Scripted([bad, good])
+    flow.intake(w, llm, batch=4)
+    assert all(p not in w.needs_intake() for p in first)
+    d = w.get(first[0] + ".plan.dues")[0]
+    assert d["day"] == 1 and d["clock"] == 360
+    assert "past" in llm.seen[1][1]       # the refusal reason went back to the AI

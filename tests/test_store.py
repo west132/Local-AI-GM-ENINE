@@ -2,7 +2,7 @@ import pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from localgm.store import Game
 
-BG = pathlib.Path("/home/user/Claude-Engine-V5/examples/harbour_guesthouse/background.md").read_text()
+BG = (pathlib.Path(__file__).resolve().parent.parent / "examples/harbour_guesthouse/background.md").read_text()
 
 
 def test_save_open_rewind(tmp_path):
