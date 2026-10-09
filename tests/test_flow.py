@@ -131,3 +131,12 @@ def test_intake_sets_dues_and_refuses_the_past():
     d = w.get(first[0] + ".plan.dues")[0]
     assert d["day"] == 1 and d["clock"] == 360
     assert "past" in llm.seen[1][1]       # the refusal reason went back to the AI
+
+
+def test_money_as_a_record_still_pays_and_never_goes_below_zero():
+    w = World(background_tree((ROOT / "tarnstead_low_fantasy" / "background.md").read_text()))
+    amount, cur = w.cash()
+    w.pay(-5)
+    assert w.cash()[0] == amount - 5 and cur
+    with pytest.raises(M.RuleError):
+        w.pay(-10 ** 6)

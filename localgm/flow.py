@@ -78,7 +78,9 @@ def inputs(step: dict, turn: Turn) -> str:
                 {k: p.get(k) for k in ("identity", "skills", "condition", "equipment", "money", "fighting_style")},
                 ensure_ascii=False))
         elif name == "active_quests":
-            parts.append("QUESTS: " + json.dumps(w.tree.get("quests") or {}, ensure_ascii=False))
+            qs = [f"{q}: {r.get('objective', '')[:140]} [{r.get('status', '')}]" for q, r in (w.tree.get("quests") or {}).items()
+                  if isinstance(r, dict)]
+            parts.append("QUESTS:\n" + ("\n".join(qs) or "none"))
         elif name == "results_so_far":
             parts.append("RESULTS SO FAR:\n" + "\n".join(turn.facts))
         elif name == "facts_from_program":

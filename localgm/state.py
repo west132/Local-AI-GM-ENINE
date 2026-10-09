@@ -177,12 +177,22 @@ class World:
         plan["triggers"] += list(triggers)
         plan.pop("text", None)
 
+    def cash(self) -> tuple[int, str]:
+        """(amount, currency). BACKGROUND money is a number, or {cash_and_accessible_funds, currency, note}."""
+        m = self.player.get("money", 0)
+        if isinstance(m, dict):
+            return int(m.get("cash_and_accessible_funds", 0)), str(m.get("currency", ""))
+        return int(m), ""
+
     def pay(self, amount: int) -> None:
         """Spend (negative) or receive (positive) money; never below zero."""
-        new = int(self.player.get("money", 0)) + amount
+        new = self.cash()[0] + amount
         if new < 0:
             raise M.RuleError("not enough money")
-        self.player["money"] = new
+        if isinstance(self.player.get("money"), dict):
+            self.player["money"]["cash_and_accessible_funds"] = new
+        else:
+            self.player["money"] = new
 
     def _vitals(self, who: str):
         """(record, condition dict, max HP) for the player or an npc id."""

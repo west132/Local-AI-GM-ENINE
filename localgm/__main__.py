@@ -14,7 +14,7 @@ def header(w) -> str:
 def show(turn) -> str:
     w = turn.world
     return "\n".join([header(w), *turn.lines, "", turn.prose,
-                      f"Cash: {w.player.get('money', 0)}"])
+                      f"Cash: {' '.join(str(x) for x in w.cash() if x != '')}"])
 
 
 def main(argv=None):
