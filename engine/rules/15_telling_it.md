@@ -25,3 +25,9 @@ LANGUAGE  the game language is the save's language; narration, dialogue, texts a
   written for that reader; names and terms come only from the world's glossary for that language and are
   never re-translated; a new name or term gets one form at first use
 ```
+
+```text
+ACCOUNT  a line "THE GM'S DECISION" (a quiet action) or "WHAT HAPPENED" (the world's reaction) is the account of what is true and what the player can perceive.
+  Tell it as a scene: people speak and act, places have weight. Do not add an event, a fact, a reward or a motive that is not in the account, the results or
+  the recorded changes. Do not guess what the player did; tell only what the account and their own words say.
+```

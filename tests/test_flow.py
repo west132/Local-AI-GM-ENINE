@@ -74,7 +74,7 @@ def test_the_ai_sees_the_ask_result_before_it_decides_the_consequence(monkeypatc
     w = world()
     llm = Scripted([LOOP_REACT,
                     {"asks": [{"question": "Does Hobb let me stay?", "obvious": "none", "likelihood": 1, "for": "the house is half empty"}]},
-                    {"minutes": 10, "ops": [{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "hostile"}]},
+                    {"report": "It happens.", "minutes": 10, "ops": [{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "hostile"}]},
                     "He refuses.", OK])
     t = flow.run_turn(w, llm, "I ask Hobb for a room")
     wonder_prompt, react_prompt = llm.seen[1][1], llm.seen[2][1]
@@ -134,8 +134,8 @@ def test_odds_stop_waits_for_the_player_then_rolls_unchanged(monkeypatch):
 def test_a_due_that_falls_during_the_action_is_resolved_in_the_same_turn():
     w = world()
     w.apply({"op": "plan", "path": "npcs.tobias_wren", "value": "locks up the loft", "due_in_minutes": 30})
-    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 60, "ops": []},
-                    {"minutes": 0, "ops": [{"op": "set", "path": "npcs.tobias_wren.state.status", "value": "walking home"}]},
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"report": "It happens.", "minutes": 60, "ops": []},
+                    {"report": "It happens.", "minutes": 0, "ops": [{"op": "set", "path": "npcs.tobias_wren.state.status", "value": "walking home"}]},
                     "Tobias leaves.", OK])
     flow.run_turn(w, llm, "I read for an hour")
     assert "locks up the loft" not in llm.seen[2][1]            # not yet due when the action began
@@ -148,11 +148,11 @@ def test_money_and_time_are_applied_by_the_program_and_overspending_is_refused()
     w = world()
     cash = w.cash()[0]
     t0 = w.time["clock_minutes"]
-    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 20, "ops": [], "money": -3}, "You pay.", OK])
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"report": "It happens.", "minutes": 20, "ops": [], "money": -3}, "You pay.", OK])
     flow.run_turn(w, llm, "I pay for tea")
     assert w.cash()[0] == cash - 3 and w.time["clock_minutes"] == t0 + 20
-    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 5, "ops": [], "money": -9999},
-                    {"minutes": 5, "ops": [], "money": 0}, "No.", OK])
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"report": "It happens.", "minutes": 5, "ops": [], "money": -9999},
+                    {"report": "It happens.", "minutes": 5, "ops": [], "money": 0}, "No.", OK])
     flow.run_turn(w, llm, "I buy the harbour")
     assert w.cash()[0] == cash - 3 and "not enough money" in llm.seen[3][1]
 
@@ -163,8 +163,8 @@ def test_a_due_clock_must_be_answered_and_the_program_fills_it():
     w.tree["active_world_pressures"][pid]["clock"]["due_at"] = {"day": 0, "clock": 0}
     w.tree["active_world_pressures"][pid]["clock"]["interval_minutes"] = 1440
     before = w.tree["active_world_pressures"][pid]["clock"]["filled"]
-    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 5, "ops": []},
-                    {"minutes": 5, "ops": [], "clocks": [{"pressure": pid, "operated": True}]}, "Rain.", OK])
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"report": "It happens.", "minutes": 5, "ops": []},
+                    {"report": "It happens.", "minutes": 5, "ops": [], "clocks": [{"pressure": pid, "operated": True}]}, "Rain.", OK])
     flow.run_turn(w, llm, "I wait")
     assert "answer it in 'clocks'" in llm.seen[3][1]
     c = w.tree["active_world_pressures"][pid]["clock"]
@@ -188,19 +188,26 @@ def test_owned_paths_and_bad_shapes_are_refused_and_nothing_partial_survives():
     assert w.commit([{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "calm"}]) == []
 
 
-def test_a_turn_whose_ops_are_refused_twice_changes_nothing_and_tells_the_narrator():
+def test_a_turn_whose_ops_are_refused_twice_is_dropped_whole():
     w = world()
-    bad = {"minutes": 30, "ops": [{"op": "set", "path": "npcs.hobb_marren", "value": "gone"}]}
+    bad = {"report": "It happens.", "minutes": 30, "report": "Gone.", "ops": [{"op": "set", "path": "npcs.hobb_marren", "value": "gone"}]}
+    snap, rnd = repr(w.tree), w.round
     llm = Scripted([LOOP_REACT, {"asks": []}, bad, bad, "Nothing happens.", OK])
-    t = flow.run_turn(w, llm, "I wait")
-    assert isinstance(w.get("npcs.hobb_marren"), dict) and w.time["clock_minutes"] == 975
-    assert any("could not be recorded" in f for f in t.facts)
+    with pytest.raises(flow.TurnFailed, match="'react' step"):
+        flow.run_turn(w, llm, "I wait")
+    assert repr(w.tree) == snap and w.round == rnd                       # not a successful-looking turn: nothing kept, no round
+
+
+def test_a_failed_check_of_the_telling_does_not_drop_the_turn():
+    w = world()
+    t = flow.run_turn(w, Scripted([FAST, "It simply happens.", "not an object", "still not"]), "I sit")
+    assert w.round == 1 and t.prose.startswith("It simply happens")           # the self-check is optional; the telling and the world are not
 
 
 def test_the_real_world_is_untouched_when_a_turn_crashes():
     w = world()
     snap, rnd = repr(w.tree), w.round
-    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 30, "ops": [], "money": -1}, RuntimeError("model died")])
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"report": "It happens.", "minutes": 30, "ops": [], "money": -1}, RuntimeError("model died")])
     with pytest.raises(RuntimeError):
         flow.run_turn(w, llm, "I wait")
     assert repr(w.tree) == snap and w.round == rnd
@@ -319,7 +326,7 @@ def test_a_looping_narrator_is_cut_off_by_the_program():
 
 def test_naming_a_person_who_is_here_is_never_a_fast_action():
     w = world()
-    llm = Scripted([FAST, {"asks": []}, {"minutes": 5, "ops": []}, "Hobb nods.", OK])
+    llm = Scripted([FAST, {"asks": []}, {"report": "It happens.", "minutes": 5, "ops": []}, "Hobb nods.", OK])
     t = flow.run_turn(w, llm, "I ask Hobb whether he has a room")
     assert "react" in t.ran and t.sort["kind"] == "loop"
     w2 = world()
@@ -331,10 +338,10 @@ def test_the_player_is_moved_by_the_program_when_the_ai_says_where_they_end_up()
     w = world()
     w.tree["locations"]["yard"] = {"name": "Yard", "conditions": {}, "challenge_band": {"min": 1, "max": 3, "basis": "x"}}
     turn = flow.Turn(w, "go to the yard")
-    flow.h_commit(turn, {"minutes": 10, "ops": [], "moved_to": "yard"})
+    flow.h_commit(turn, {"report": "It happens.", "minutes": 10, "ops": [], "moved_to": "yard"})
     assert w.tree["world_state"]["location"] == "yard"
     with pytest.raises(M.RuleError, match="not a place"):
-        flow.h_commit(flow.Turn(w, "x"), {"minutes": 1, "ops": [], "moved_to": "the moon"})
+        flow.h_commit(flow.Turn(w, "x"), {"report": "It happens.", "minutes": 1, "ops": [], "moved_to": "the moon"})
     assert w.tree["world_state"]["location"] == "yard"
 
 

@@ -182,6 +182,7 @@ turn:
           type: array
           description: "ONLY if you need another result before you can decide: ask here and leave minutes/ops empty; the program answers and asks you again. Empty when you are ready to decide."
           items: *askitem
+        report: {type: string, description: "REQUIRED when you are not asking: what happened in the world during this action, in plain sentences: who did what and why, only what the player could see, hear or learn. The telling is built from this, so it must cover every change you record that the player would notice"}
         minutes: {type: integer, minimum: 0, description: "believable duration of what happened"}
         moved_to: {type: string, description: "the place id where the player stands when this action ends, if it changed; the place must be in the records (a new place is written in ops first)"}
         ops:
@@ -320,6 +321,7 @@ turn:
     program: ending
 
   - id: checkpoint
+    optional: true          # the turn stands if this one fails twice; every other step must succeed or the turn is dropped
     when: "turn.checkpoint_due"
     rules: [20_checkpoint]
     input: [open_items, resolved_facts]
@@ -351,6 +353,7 @@ turn:
     program: show
 
   - id: audit
+    optional: true          # the turn stands if this one fails twice; every other step must succeed or the turn is dropped
     when: "not turn.halt"
     rules: [03_invariants, 15_telling_it]
     input: [player_who, place, prose, facts_from_program]
@@ -363,6 +366,7 @@ turn:
     program: audit
 
   - id: epilogue
+    optional: true          # the turn stands if this one fails twice; every other step must succeed or the turn is dropped
     when: "turn.ended_now"
     rules: [21_epilogue]
     input: [place, facts_from_program, story_so_far]

@@ -83,6 +83,10 @@ def c_react(ai):
     t = _turn("I pay Hobb for a cup of tea and sit at the front desk for twenty minutes.")
     t.results.append("RESULT question 'Does Hobb serve tea?' → YES (settled): he runs a guesthouse")
     out = flow.run_step(ai, _step("react"), t)
+    if out.get("asks"):
+        return False, "it asked a question although the answer was already given in RESULTS"
+    if len(str(out.get("report") or "").strip()) < 5:
+        return False, "no `report` (the plain account of what happened, which the telling is built from)"
     faults = rules.op_faults(t.world, out["ops"], t.resolved, t.governs) + t.world.clone().commit([o for o in out["ops"] if o["op"] != "plan"])
     return not faults, (f"{len(out['ops'])} change(s), {out['minutes']} min" if not faults else faults[0][:140])
 

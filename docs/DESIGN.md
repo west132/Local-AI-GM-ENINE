@@ -48,3 +48,16 @@ Dates are then written `Year 318, Floodmonth 6` (and `… 18:30`, `… dawn`) in
 first checks. `localgm/clock.py` turns them into day numbers, adds days across months, years and leap days, and prints them back. The AI is never asked to
 convert or count a date; if it has to read a plan note at all, every date in the note must come back on the right day. The table is the program's
 (`calendar` cannot be edited by the AI). The generator can fill the table from the idea and checks every date it writes against it.
+
+
+## Hand-offs between AI calls
+
+Each AI call is a new request: it knows only what the program puts in front of it. So every decision one call makes must be carried by the program to the
+calls that need it, and a turn the program could not record is dropped, never narrated.
+
+- The sorter's `note` (fast / retrieval / continuation) is passed to the telling as "THE GM'S DECISION"; a retrieval also gets the player's records.
+- The world step's `report` (what happened, who did what and why, only what the player could perceive) is passed to the telling as "WHAT HAPPENED",
+  after the program accepted the changes it proposed. Secrets named in it are refused.
+- Results of dice and questions are passed to the next call as RESULTS; resolved ones are frozen in the ledger.
+- A step the turn cannot do without that fails twice raises `TurnFailed`: no change is kept, the round does not advance. Only the self-check, the ten-round check and
+  the recap may fail without dropping the turn.

@@ -10,7 +10,7 @@ QUEST = {"kind": "loop", "steps": ["quest"]}
 
 
 def react(**kw):
-    return {"minutes": 0, "ops": [], **kw}
+    return {"report": "It happens.", "minutes": 0, "ops": [], **kw}
 
 
 def skill(w):

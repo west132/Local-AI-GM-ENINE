@@ -16,7 +16,7 @@ class Good:
         if "asks" in form and "minutes" not in form:
             return {"asks": []}
         if "minutes" in form:
-            return {"minutes": 20, "ops": []}
+            return {"report": "It happens.", "minutes": 20, "ops": []}
         return {"ok": True}
 
 

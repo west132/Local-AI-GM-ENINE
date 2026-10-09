@@ -91,6 +91,71 @@ def test_fewer_calls_per_turn_when_asked():
 def test_a_merged_world_step_can_ask_and_then_decide():
     from test_loops import Bot
     ask = {"asks": [{"question": "Does Hobb have a room for the night?", "obvious": "YES - it is a guesthouse and he is the owner", "likelihood": 1}]}
-    t = flow.run_turn(world(), Bot(sort={"kind": "loop", "steps": ["react"]}, react=[ask, {"asks": [], "minutes": 5, "ops": []}]),
+    t = flow.run_turn(world(), Bot(sort={"kind": "loop", "steps": ["react"]}, react=[ask, {"asks": [], "report": "It happens.", "minutes": 5, "ops": []}]),
                       "I ask Hobb for a room", merge_questions=True)
     assert "wonder" not in t.ran and any("settled" in r for r in t.results) and t.ran.count("react") == 2
+
+
+def test_home_knows_whether_this_ai_was_checked(tmp_path):
+    s = Settings(tmp_path)
+    s.update({"backend": "server", "model": "m1"})
+    assert s.check_status()[0] == "none"
+    s.remember_check({"passed": 7, "total": 7, "verdict": "Good"})
+    assert s.check_status() == ("good", "AI check: 7/7 — Good")
+    s.update({"model": "m2"})                                             # another model: the old result does not apply
+    assert s.check_status()[0] == "none"
+    s.update({"model": "m1"}); s.remember_check({"passed": 3, "total": 7, "verdict": "Weak"})
+    assert s.check_status()[0] == "weak"
+    s.update({"backend": "demo"})
+    assert s.check_status()[0] == "demo"
+
+
+# ---------- the same scripted game through every adapter ----------
+
+def _scenario_bot():
+    from test_loops import Bot
+    ask = {"asks": [{"question": "Does Hobb have a room for the night?", "obvious": "YES - it is a guesthouse and he is the owner", "likelihood": 1}]}
+    return Bot(sort={"kind": "loop", "steps": ["react"]}, react=[ask, {"asks": [], "report": "Hobb hands over a key.", "minutes": 10,
+               "ops": [{"op": "set", "path": "npcs.hobb_marren.state.status", "value": "has given Rin a room key", "requires": {"on": "Does Hobb have a room for the night?", "answer": "YES"}}]}],
+               tell="Hobb slides a brass key across the desk.")
+
+
+def _play(llm):
+    w = world()
+    t = flow.run_turn(w, llm, "I ask Hobb for a room")
+    return w, t
+
+
+def test_the_same_game_gives_the_same_world_through_every_adapter(server, monkeypatch):
+    direct_w, direct_t = _play(_scenario_bot())
+    bot = _scenario_bot()
+
+    class Play(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_POST(self):
+            req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            system, user = req["messages"][0]["content"], req["messages"][1]["content"]
+            schema = req.get("response_format", {}).get("json_schema", {}).get("schema")
+            r = bot.ask(system, user, schema)
+            out = json.dumps({"choices": [{"message": {"content": r if isinstance(r, str) else json.dumps(r)}}]}).encode()
+            self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+    srv = HTTPServer(("127.0.0.1", 0), Play)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    http_w, http_t = _play(backend.OpenAICompat(f"http://127.0.0.1:{srv.server_port}/v1", "m"))
+    srv.shutdown()
+
+    bot2 = _scenario_bot()
+    class FakeLlama:
+        def __init__(self, **kw): pass
+        def create_chat_completion(self, messages, temperature, max_tokens, response_format=None, **kw):
+            schema = (response_format or {}).get("schema")
+            r = bot2.ask(messages[0]["content"], messages[1]["content"], schema)
+            return {"choices": [{"message": {"content": r if isinstance(r, str) else json.dumps(r)}}]}
+    monkeypatch.setitem(sys.modules, "llama_cpp", types.SimpleNamespace(Llama=FakeLlama))
+    gguf_w, gguf_t = _play(backend.LlamaCpp("x.gguf", 4096, 0))
+
+    for w, t in ((http_w, http_t), (gguf_w, gguf_t)):
+        assert w.tree == direct_w.tree and w.round == 1
+        assert t.prose == direct_t.prose == "Hobb slides a brass key across the desk."
+        assert any("WHAT HAPPENED" in f and "hands over a key" in f for f in t.facts)
+    assert direct_w.get("npcs.hobb_marren.state.status") == "has given Rin a room key"

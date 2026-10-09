@@ -10,7 +10,7 @@ class Bot:
     """Answers each form by what it asks for. `r` maps a form name to a reply (or a list used in order)."""
     def __init__(self, **r):
         self.r = {"sort": FAST, "judge": {"verdict": "certain", "cites": ["player"]}, "fight": None, "wonder": {"asks": []},
-                  "react": {"asks": [], "minutes": 5, "ops": []}, "offer": {"new_offer": False}, "quest": {"ops": []}, "injury": None,
+                  "react": {"asks": [], "report": "It happens.", "minutes": 5, "ops": []}, "offer": {"new_offer": False}, "quest": {"ops": []}, "injury": None,
                   "ending": {"met": [], "closed": []}, "checkpoint": {"ops": [], "notes": []}, "audit": OK, "tell": "It happens.",
                   "epilogue": "And so it ended."}
         self.r.update(r)
@@ -92,10 +92,10 @@ def test_a_supply_draw_and_a_resupply_are_applied_by_the_program():
     w = world()
     w.player["resources"] = {"torches": {"name": "torches", "tracking": "exact", "count": 5}}
     run(w, sort={"kind": "loop", "steps": ["react"]},
-        react={"asks": [], "minutes": 5, "ops": [], "draw": [{"resource": "torches", "amount": 2}]})
+        react={"asks": [], "report": "It happens.", "minutes": 5, "ops": [], "draw": [{"resource": "torches", "amount": 2}]})
     assert w.player["resources"]["torches"]["count"] == 3
     w.player["resources"]["torches"]["count"] = 0
-    t, _ = run(w, sort={"kind": "loop", "steps": ["react"]}, react={"asks": [], "minutes": 5, "ops": [], "resupply": [{"resource": "torches", "count": 4}]})
+    t, _ = run(w, sort={"kind": "loop", "steps": ["react"]}, react={"asks": [], "report": "It happens.", "minutes": 5, "ops": [], "resupply": [{"resource": "torches", "count": 4}]})
     assert w.player["resources"]["torches"]["count"] == 4
 
 
@@ -110,8 +110,8 @@ def test_a_chain_offer_rolls_a_first_child(monkeypatch):
 def test_a_name_where_an_id_belongs_is_sent_back_not_a_crash():
     w = world()
     t, bot = run(w, sort={"kind": "loop", "steps": ["react"]},
-                 react=[{"asks": [], "minutes": 5, "ops": [], "heal": [{"who": "Hobb Marren", "source": "standard"}]},
-                        {"asks": [], "minutes": 5, "ops": [], "heal": [{"who": "hobb_marren", "source": "standard"}]}])
+                 react=[{"asks": [], "report": "It happens.", "minutes": 5, "ops": [], "heal": [{"who": "Hobb Marren", "source": "standard"}]},
+                        {"asks": [], "report": "It happens.", "minutes": 5, "ops": [], "heal": [{"who": "hobb_marren", "source": "standard"}]}])
     assert w.round == 1 and bot.seen.count("react") >= 2          # the first reply was refused with the reason, the second was recorded
 
 
@@ -155,5 +155,66 @@ def test_carrying_on_takes_time_and_the_world_answers():
     w = world()
     before = (w.time["day_index"], w.time["clock_minutes"])
     t, bot = run(w, "I wait for an hour", sort={"kind": "continuation", "steps": [], "note": "An hour passes at the desk."},
-                 react={"asks": [], "minutes": 60, "ops": []})
+                 react={"asks": [], "report": "It happens.", "minutes": 60, "ops": []})
     assert "react" in t.ran and (w.time["day_index"], w.time["clock_minutes"]) > before and w.time["clock_minutes"] == before[1] + 60
+
+
+def test_the_gms_account_reaches_the_telling_and_secrets_stay_out_of_it():
+    w = world()
+    t, bot = run(w, "I ask Hobb for a room", sort={"kind": "loop", "steps": ["react"]},
+                 react={"asks": [], "report": "Hobb checks the register, finds a free room and hands over the key.", "minutes": 5, "ops": []})
+    assert any(f.startswith("WHAT HAPPENED") and "hands over the key" in f for f in t.facts)
+    tell = next(s for s in flow.load_steps() if s["id"] == "tell")
+    assert "hands over the key" in flow.inputs(tell, t)
+
+
+def test_a_reaction_without_an_account_is_sent_back():
+    w = world()
+    t, bot = run(w, sort={"kind": "loop", "steps": ["react"]},
+                 react=[{"asks": [], "minutes": 5, "ops": []}, {"asks": [], "report": "Nothing the player notices.", "minutes": 5, "ops": []}])
+    assert bot.seen.count("react") == 2 and w.round == 1
+
+
+def test_a_reaction_that_cannot_be_recorded_drops_the_whole_turn():
+    w = world()
+    snap, rnd = repr(w.tree), w.round
+    bad = {"asks": [], "report": "Gone.", "minutes": 30, "ops": [{"op": "set", "path": "npcs.hobb_marren", "value": "gone"}]}
+    with pytest.raises(flow.TurnFailed):
+        flow.run_turn(w, Bot(sort={"kind": "loop", "steps": ["react"]}, react=bad), "I wait")
+    assert repr(w.tree) == snap and w.round == rnd
+
+
+def test_a_reply_that_is_never_a_usable_form_drops_the_turn_too():
+    w = world()
+    class Junk:
+        def ask(self, system, user, schema=None, max_tokens=None):
+            if schema is None:
+                return "text"
+            raise ValueError("not json")
+    with pytest.raises(flow.TurnFailed, match="'sort' step"):
+        flow.run_turn(w, Junk(), "x")
+    assert w.round == 0
+
+
+def test_a_report_that_names_a_hidden_thing_is_sent_back():
+    from test_rules import hidden_world
+    w = hidden_world()
+    t, bot = run(w, "I wait", sort={"kind": "loop", "steps": ["react"]},
+                 react=[{"asks": [], "report": "Ostrava slips away from the pier.", "minutes": 5, "ops": []},
+                        {"asks": [], "report": "Someone slips away from the pier.", "minutes": 5, "ops": []}])
+    assert bot.seen.count("react") == 2 and not any("Ostrava" in f for f in t.facts)
+
+
+def test_how_many_ai_calls_a_turn_needs():
+    """The fewest calls each kind of turn can take, with the two call-saving choices on. (Choices off: +1 audit, +1 separate asking call for a world step.)"""
+    from localgm import flow as F
+    def calls(sort, **r):
+        t_bot = Bot(sort=sort, **r)
+        F.run_turn(world(), t_bot, "I act", merge_questions=True, check_telling=False)
+        return t_bot.seen
+    assert calls({"kind": "fast", "steps": [], "note": "It happens."}) == ["sort", "tell"]
+    assert calls({"kind": "retrieval", "steps": [], "note": "A rucksack."}) == ["sort", "tell"]
+    assert calls({"kind": "loop", "steps": ["react"]}, react={"asks": [], "report": "Hobb nods.", "minutes": 5, "ops": []}) == ["sort", "react", "tell"]
+    ask = {"asks": [{"question": "Does he agree?", "obvious": "none", "likelihood": 0}]}
+    assert calls({"kind": "loop", "steps": ["react"]}, react=[ask, {"asks": [], "report": "Hobb nods.", "minutes": 5, "ops": []}]) == ["sort", "react", "react", "tell"]
+    assert calls({"kind": "loop", "steps": ["judge", "react"]}, judge=roll_form(committed=True), react={"asks": [], "report": "It works.", "minutes": 5, "ops": []}) == ["sort", "judge", "react", "tell"]

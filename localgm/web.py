@@ -31,6 +31,12 @@ def page(title: str, body: str, extra_head: str = "") -> bytes:
             f'<title>{html.escape(title)}</title><style>{CSS}</style>{extra_head}</head><body>{nav}<main>{body}</main></body></html>').encode()
 
 
+def _checked() -> dict:
+    res = modelcheck.run(APP.model(), lambda i, n: APP.job.update(step=n))
+    APP.settings.remember_check(res)
+    return {"check": res}
+
+
 class App:
     def __init__(self, root="."):
         self.root = pathlib.Path(root)
@@ -62,7 +68,7 @@ class App:
                 self.job["result"] = fn()
                 self.job["state"] = "done"
             except Exception as e:      # shown on the page; nothing is swallowed
-                self.job.update(state="error", error=f"{type(e).__name__}: {e}")
+                self.job.update(state="error", error=str(e) if isinstance(e, flow.TurnFailed) else f"{type(e).__name__}: {e}")
             finally:
                 flow.on_step = None
         threading.Thread(target=run, daemon=True).start()
@@ -105,13 +111,16 @@ def home() -> bytes:
     opts = "".join(f'<option value="{w}">{w}</option>' for w in APP.worlds())
     model = APP.settings.data
     where = {"gguf": f"model file: {model['gguf'] or 'first in models folder'}", "server": f"server: {model['url']}", "api": f"API: {model['url']} · {model['model'] or 'default model'}", "demo": "demo (no AI)"}[model["backend"]]
+    level, stat = APP.settings.check_status()
     body = f'''<h1>Your games</h1>{rows}
 <h1>New game</h1><form class="card" method="post" action="/new" enctype="application/x-www-form-urlencoded">
 <label>Game name</label><input name="name" required pattern="[A-Za-z0-9_\\-]+" title="letters, numbers, - and _" placeholder="my_game">
 <label>World</label><select name="world">{opts}<option value="__paste">Paste my own BACKGROUND…</option></select>
 <div id="paste" hidden><label>BACKGROUND text</label><textarea name="background" rows="8"></textarea></div>
-<p class="mut">AI: {html.escape(where)} — change it in <a href="/settings">Settings</a>.</p><button>Start</button></form>
-<script>const s=document.querySelector('select[name=world]');s.onchange=()=>document.getElementById('paste').hidden=s.value!='__paste'</script>
+<p class="mut">AI: {html.escape(where)} — change it in <a href="/settings">Settings</a>.</p>
+<p id="aistat" class="{'bad' if level in ('none', 'weak') else 'mut'}">{html.escape(stat)}</p><button>Start</button></form>
+<script>const s=document.querySelector('select[name=world]');s.onchange=()=>document.getElementById('paste').hidden=s.value!='__paste';
+document.querySelector('form[action="/new"]').onsubmit=e=>{{const l={json.dumps(level)};if((l=='none'||l=='weak')&&!confirm(document.getElementById('aistat').textContent+'\\nStart anyway?'))e.preventDefault()}}</script>
 <h1>Make a new world</h1><form class="card" method="post" action="/generate">
 <p class="mut">Say what you want in a few lines — a setting, a game it comes from, who you play. The AI fills the forms; the program checks every one.</p>
 <textarea name="idea" id="idea" rows="3" required placeholder="e.g. Skyrim, start as a Nord thief in Riften, low magic, long main story"></textarea>
@@ -291,7 +300,7 @@ class H(BaseHTTPRequestHandler):
                 for k, v in f.items():
                     if k in ("backend", "url", "model", "gguf", "device"):
                         APP.settings.data[k] = v          # check what is on the page; Save is still the player's choice
-                started = APP.start("check", "check", lambda: {"check": modelcheck.run(APP.model(), lambda i, n: APP.job.update(step=n))})
+                started = APP.start("check", "check", lambda: _checked())
                 return self.json({"started": started}) if started else self.send(b"The AI is busy with another job.", 409, "text/plain")
             if parts == ["settings", "test"]:
                 return self.json({"message": self.test_ai(f)})

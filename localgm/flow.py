@@ -543,6 +543,13 @@ def h_commit(turn: Turn, out: dict):
         do_asks(turn, out["asks"])
         return "ask_again"
     w, new_fills, facts, lines = turn.world, [], [], []
+    report = str(out.get("report") or "").strip()
+    if len(report) < 5:
+        raise M.RuleError("`report` is missing: say in plain sentences what happened in the world during this action, who did what and why, "
+                          "limited to what the player could see, hear or learn. The telling is built from it.")
+    bad = rules.leaks(report, rules.secret_terms(w, turn.text + " " + " ".join(turn.results + turn.facts)))
+    if bad:
+        raise M.RuleError(f"your report names {bad}, which the player has not learned. Leave them out of the report (record them in ops).")
     trial = w.clone()
     faults = rules.op_faults(w, out["ops"], turn.resolved, turn.governs)
     now_ops = [o for o in out["ops"] if o["op"] != "plan"]
@@ -573,6 +580,7 @@ def h_commit(turn: Turn, out: dict):
         w.clear_due(p, d)
     _record_lines(turn, out["ops"])
     _events(turn, out["ops"])
+    turn.facts.append("WHAT HAPPENED (the GM's account of the accepted events; tell it, add nothing that changes the world): " + report)
     turn.facts += facts
     turn.lines += lines
     if out.get("money"):
@@ -706,6 +714,10 @@ def _when(expr: str, turn: Turn) -> bool:
     return bool(eval(expr, {"__builtins__": {}}, env))
 
 
+class TurnFailed(Exception):
+    """A step the turn cannot do without could not be recorded. Nothing of the turn is kept and the round does not advance."""
+
+
 def execute(llm, step: dict, turn: Turn):
     """One step: show, ask, hand to its handler; a refusal sends the AI back once with the reason."""
     if "dues_fired" in step.get("input", []):
@@ -715,7 +727,14 @@ def execute(llm, step: dict, turn: Turn):
     extra = ""
     for attempt in range(2):
         turn.final = attempt == 1
-        out = run_step(llm, step, turn, extra)
+        try:
+            out = run_step(llm, step, turn, extra)
+        except ValueError as e:                  # two replies in a row that were not a usable form
+            if step.get("optional"):
+                turn.facts.append(f"(Step {step['id']} could not be recorded; narrate none of its changes.)")
+                return
+            raise TurnFailed(f"The AI could not give a usable answer for the '{step['id']}' step after two tries ({str(e)[:240]}). "
+                             "Nothing was recorded and the round did not advance; send the action again.") from None
         try:
             return HANDLERS[step["program"]](turn, out)
         except M.RuleError as e:
@@ -723,7 +742,11 @@ def execute(llm, step: dict, turn: Turn):
         except (KeyError, IndexError, TypeError, AttributeError, ValueError) as e:      # an id or shape in the answer that the records do not have
             extra = (f"\n\nThe program could not use your reply: {type(e).__name__}: {e}. Something it names does not exist or has the wrong shape. "
                      "Use the ids shown in the records (npc ids like nadia_voss, 'player', place ids), not names or descriptions.\nReply again, fixed.")
-    turn.facts.append(f"(Step {step['id']} could not be recorded; narrate none of its changes.)")
+    if step.get("optional"):                 # a check or a recap: the turn stands without it
+        turn.facts.append(f"(Step {step['id']} could not be recorded; narrate none of its changes.)")
+        return
+    raise TurnFailed(f"The AI could not give a usable answer for the '{step['id']}' step after two tries ({extra.strip().splitlines()[0][:200]}). "
+                     "Nothing was recorded and the round did not advance; send the action again.")
 
 
 def _check_dates(world: World, a: dict) -> None:

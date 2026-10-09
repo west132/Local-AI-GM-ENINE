@@ -73,7 +73,10 @@ def commit_attempt(monkeypatch, band, ops_first, ops_second=None, governs=("npcs
     if ops_second is not None:
         replies.append(react(ops=ops_second))
     llm = Scripted(replies + ["ok", OK])
-    t = flow.run_turn(w, llm, "I ask Hobb for a room")
+    try:
+        t = flow.run_turn(w, llm, "I ask Hobb for a room")
+    except flow.TurnFailed as e:
+        t = e                                   # the whole turn was dropped: the world below is untouched
     return w, t, llm
 
 
@@ -98,7 +101,7 @@ def test_if_the_ai_insists_on_contradicting_the_result_the_previous_state_is_kep
     w0 = world()
     w, t, llm = commit_attempt(monkeypatch, "NO, AND", [MOOD("welcoming", requires=YES)], [MOOD("welcoming", requires=YES)])
     assert w.get("npcs.hobb_marren.state.mood") is None and w.time["clock_minutes"] == w0.time["clock_minutes"]
-    assert any("could not be recorded" in f for f in t.facts)
+    assert isinstance(t, flow.TurnFailed) and "'react' step" in str(t) and w.round == 0       # no half-turn: the round did not advance
 
 
 def test_a_roll_result_binds_the_same_way(monkeypatch):
@@ -264,7 +267,7 @@ class Chaos:
             return r.choice(["The scene is quiet. " * 3, "A line. A line. A line.", "Nothing.", "```text\nx\n```"])
         form = system.split("REPLY with one JSON")[1]
         if "kind" in form and "steps" in form:
-            return {"kind": r.choice(["fast", "loop", "loop", "loop", "continuation"]), "steps": r.sample(["judge", "react", "quest"], r.randint(0, 3))}
+            return {"kind": r.choice(["fast", "loop", "loop", "loop", "continuation"]), "steps": r.sample(["judge", "react", "quest"], r.randint(0, 3)), "note": "something simply happens"}
         if "verdict" in form:
             sub = f"s{r.randint(1, 4)}"
             return {"verdict": r.choice(["certain", "impossible", "roll", "roll"]), "cites": r.sample(self.paths, 2) if r.random() < .7 else ["no.such"],
@@ -273,7 +276,7 @@ class Chaos:
         if "asks" in form:
             return {"asks": [{"question": r.choice(["Does it work?", "What now", "Will they come?"]), "obvious": r.choice(["none", "none", "YES - plain", "NO - plain", "maybe"]), "likelihood": r.randint(-3, 3), "for": "f", "governs": r.sample(self.paths, 1)} for _ in range(r.randint(0, 2))]}
         if "minutes" in form:
-            return {"minutes": r.choice([0, 5, 30, 200, 1500]), "ops": [self.op() for _ in range(r.randint(0, 4))], "money": r.choice([0, 0, -2, 5, -999]),
+            return {"report": "It happens.", "minutes": r.choice([0, 5, 30, 200, 1500]), "ops": [self.op() for _ in range(r.randint(0, 4))], "money": r.choice([0, 0, -2, 5, -999]),
                     "rest": r.choice(["none", "none", "rest", "sleep"]), "boundary": r.choice(["none", "training"])}
         if "new_offer" in form:
             return {"new_offer": r.random() < .3}
@@ -300,7 +303,7 @@ def test_a_hostile_model_cannot_corrupt_a_long_campaign(name, tmp_path):
         before = copy.deepcopy(w.tree)
         try:
             flow.run_turn(w, llm, "I act")
-        except (ValueError, flow.ScenarioEnded):
+        except (ValueError, flow.ScenarioEnded, flow.TurnFailed):
             assert w.tree == before                                    # a failed turn changes nothing at all
             refused += 1
             continue
@@ -311,5 +314,5 @@ def test_a_hostile_model_cannot_corrupt_a_long_campaign(name, tmp_path):
         done += 1
         g.save()
         world_ok(w, initial)
-    assert done >= 30, (done, refused)                                # the fuzz really ran turns through the commit path
+    assert done >= 15 and refused >= 1, (done, refused)               # turns really went through the commit path, and a hostile reply drops the whole turn
     assert Game.open(tmp_path, "z").world.tree == w.tree             # what is on disk is what is in memory

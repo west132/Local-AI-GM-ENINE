@@ -108,3 +108,8 @@ COMPANIONS  joining or leaving needs causal support; no auto-joining; solo stays
   ask for help, propose retreat, refuse a reckless order (section 5); the player's property stays the
   player's; standing permission may cover routine shared supplies
 ```
+
+```text
+REPORT  after deciding, write `report`: the plain account of what happened in the world during this action. Who did what, and why, limited to what the player could
+  see, hear or learn. It must cover every recorded change the player would notice. Nothing the player could not perceive goes in it (that goes in ops, with its cause).
+```

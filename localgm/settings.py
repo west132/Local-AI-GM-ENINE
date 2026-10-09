@@ -69,6 +69,25 @@ class Settings:
     def turn_options(self) -> dict:
         return {"merge_questions": self.data["merge_questions"] == "yes", "check_telling": self.data["check_telling"] == "yes"}
 
+    def fingerprint(self) -> str:
+        """Which AI this is: a check result belongs to one model on one backend."""
+        d = self.data
+        return "|".join(str(d.get(k, "")) for k in ("backend", "model", "gguf", "url", "device", "ctx"))
+
+    def remember_check(self, res: dict) -> None:
+        self.data["last_check"] = {"for": self.fingerprint(), "passed": res["passed"], "total": res["total"], "verdict": res["verdict"]}
+        self.save()
+
+    def check_status(self) -> tuple[str, str]:
+        """(level, text) for Home: good | usable | weak | none."""
+        c = self.data.get("last_check")
+        if self.data["backend"] == "demo":
+            return "demo", "Demo mode: no AI is used."
+        if not c or c.get("for") != self.fingerprint():
+            return "none", "This AI has not been checked yet. Settings → Check this model."
+        level = "good" if c["passed"] == c["total"] else "usable" if c["passed"] >= c["total"] - 2 else "weak"
+        return level, f"AI check: {c['passed']}/{c['total']} — {c['verdict']}"
+
     def api_key(self) -> str:
         return self.data.get("api_key") or os.environ.get("LGM_API_KEY", "")
 
