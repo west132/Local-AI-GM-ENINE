@@ -1,0 +1,13 @@
+{
+ "n": 44,
+ "system_id": "05de5aa6",
+ "user": "PLACE: Hale Workshop, Morrow Ward — {\"access\": \"Rin rents the street-level workshop and back room; a hand-painted sign says RECOVERY & ODD JOBS\", \"public_surface\": \"ordinary mixed commercial block; landlady upstairs\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"shutter down; Rin and Eli inside\", \"embankment\": \"disused rail embankment in steady rain: six padlocked brick relay huts, weeds, a service road\"}\nTIME: 2026-10-06 21:30, night\nPERSON eli_voss: {\"name\": \"Eli Voss\", \"job\": \"transit maintenance technician\", \"gender\": \"man\", \"character\": \"earnest train nerd, brave in a badly planned way, talks fast when scared, can't lie to his sister\", \"doing\": \"at Hale Workshop with Rin, on his own terms: nowhere that keeps records (no hospital, no police, not his own flat), he keeps the shard on him, and he will not speak to Nadia until he has decided who is behind this\"}\n\nTEXT TO CHECK:\nEli doesn't say yes. He says what he'll do. He will come, but not to a hospital, not to the police, and not to his own flat, anywhere that keeps a record. The shard stays in his pocket. And he won't speak to his sister until he knows who is behind this. Then he gets up from the doorway, wincing on the ankle, and lets you help him down the embankment.\n\nYou take him back through the wet evening traffic, two on the bike, and by 21:30 the shutter of Hale Workshop is down behind you both. He is safe. Whatever he decides next, he decides it here.\n\nHe stands in the middle of your workshop, dripping, looking at the walls as if checking them for exits.\n\nFACTS (tell exactly these):\nRESULT question 'Does Eli agree to leave hut 3 and ride with Rin to Hale Workshop?' → NO, BUT\nRECORDED set npcs.eli_voss.state.position \"hale_workshop\"\nRECORDED set npcs.eli_voss.state.status \"at Hale Workshop with Rin, on his own terms: nowhere that keeps records (no hospital, no police, not his own flat), he keeps the shard on him, and he will not \nRECORDED set npcs.eli_voss.state.carries \"phone (off); the shard, kept on him\"\nRECORDED set world_state.location \"hale_workshop\"\nRECORDED set world_state.environment.workshop \"shutter down; Rin and Eli inside\"\nRECORDED set quests.find_eli_voss.status \"completed\"\nQuest find_eli_voss completed. The player earned 29 XP.",
+ "reply": {
+  "ok": true,
+  "problems": []
+ },
+ "error": null,
+ "secs": 1.2,
+ "max_tokens": null,
+ "wants": "json"
+}

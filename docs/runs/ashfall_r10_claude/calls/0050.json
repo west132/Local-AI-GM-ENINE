@@ -1,0 +1,13 @@
+{
+ "n": 50,
+ "system_id": "05de5aa6",
+ "user": "PLACE: Hale Workshop, Morrow Ward — {\"access\": \"Rin rents the street-level workshop and back room; a hand-painted sign says RECOVERY & ODD JOBS\", \"public_surface\": \"ordinary mixed commercial block; landlady upstairs\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"shutter down; Rin and Eli inside\", \"embankment\": \"disused rail embankment in steady rain: six padlocked brick relay huts, weeds, a service road\"}\nTIME: 2026-10-06 21:50, night\nPERSON eli_voss: {\"name\": \"Eli Voss\", \"job\": \"transit maintenance technician\", \"gender\": \"man\", \"character\": \"earnest train nerd, brave in a badly planned way, talks fast when scared, can't lie to his sister\", \"doing\": \"at Hale Workshop on his own terms; refused to let the shard out of his hands and now watches Rin's interest in it with suspicion\"}\n\nTEXT TO CHECK:\nYou do it the slow way, one layer at a time: plastic, cardboard, glass, and last of all the steel tin, with Eli holding each container himself and his eyes on your hands. Through every layer you can still read it, and through the steel too, which is more than you expected. A usable reading, and you file it away.\n\nThen you ask to leave it in the tin on the shelf.\n\n\"No.\" Eli closes his fist around the tin before you've finished the sentence. \"It stays with me.\" He says it flatly, and he doesn't stop looking at you. You wonder, from the way he holds it, whether the question made him trust you less.\n\nFACTS (tell exactly these):\nRESULT roll SUCCESS: Rin gets a usable reading of the shard's resonance even through the tin\nRESULT question 'Does Eli let Rin leave the shard in the steel tin on the shelf instead of keeping it on him?' → NO, AND\nThe player earned 15 XP.\nRECORDED set npcs.eli_voss.state.status \"at Hale Workshop on his own terms; refused to let the shard out of his hands and now watches Rin's interest in it with suspicion\"",
+ "reply": {
+  "ok": true,
+  "problems": []
+ },
+ "error": null,
+ "secs": 1.2,
+ "max_tokens": null,
+ "wants": "json"
+}

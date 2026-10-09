@@ -1,0 +1,13 @@
+{
+ "n": 37,
+ "system_id": "05de5aa6",
+ "user": "PLACE: Canal Street embankment relay huts — {\"character\": \"six padlocked brick relay huts on a disused rail embankment, weeds, a service road\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"locked up for the night; Rin is out\", \"embankment\": \"disused rail embankment in steady rain: six padlocked brick relay huts, weeds, a service road\"}\nTIME: 2026-10-06 21:15, night\n\nTEXT TO CHECK:\nThis time the door gives. Hut 3 opens a hand's width, then wider, and the man inside lowers himself into the doorway as if sitting costs him something.\n\nHe tells it in pieces, with long stops for the rain, and you let him; what he says is what he has been alone with for two days. When you tell him the shard is what draws the creatures, he is quiet a moment, then takes it out and shows it to you without letting it leave his hand.\n\nHe keeps it. He is still watching you while he talks.\n\nFACTS (tell exactly these):\nRESULT question 'Does Eli open the door of hut 3 to Rin?' → YES\nRECORDED set npcs.eli_voss.state.status \"has opened hut 3 to Rin and sits in the doorway telling her what happened on Oct 4; shows her the shard but keeps it\"",
+ "reply": {
+  "ok": true,
+  "problems": []
+ },
+ "error": null,
+ "secs": 1.2,
+ "max_tokens": null,
+ "wants": "json"
+}

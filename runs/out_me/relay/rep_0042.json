@@ -1,0 +1,1 @@
+{"reply": {"ops": [{"op": "set", "path": "quests.find_eli_voss.status", "value": "completed", "requires": {"on": "Does Eli agree to leave hut 3 and ride with Rin to Hale Workshop?", "answer": "NO"}, "because": "Eli is found and safe at Hale Workshop, on his own terms"}]}}

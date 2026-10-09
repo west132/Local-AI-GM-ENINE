@@ -1,0 +1,65 @@
+{
+ "n": 5,
+ "system_id": "3888ebdb",
+ "user": "\n\nTODAY: 2026-10-06 at 19:40 (day_offset 0)\n\nnpcs.lina_dalen: move='ask dispatch about his shifts; seek a clinic appointment; speak to a serious investigator if public trouble starts or she finds similar charm cases' | note='2026-10-07 07:30 first contact with dispatch and possible clinic; earlier if Imran goes missing or his condition suddenly changes'\nnpcs.l_warren: move=\"collect the cell's payment and move the remaining cache to an agreed courier without attracting attention; when evidence of a creature or police scrutiny makes this too dangerous, seek a safer deal or abandon the stock\" | note='2026-10-08 22:00 agreed collection at Suds & Spin; earlier on a real hazard, visit or loss of access'\nnpcs.court_runner: move=\"at the next low-water window carry a brief status token through the damaged bleed-drain to the Mercer sump, then reach the Southport outlet or Orin's arranged watcher if the route remains physically open\" | note='2026-10-08 04:00 low-water window, then each window after (mercer_pump.low_water); if pump flow or grate blocks passage, retreat and replan after observing actual conditions'\nactive_world_pressures.glass_spread: clock 'Lowfield hollowing' | pace='every 4 days while someone continues wearing contaminated glass or new stock actually circulates; repairs, isolation and destroyed stock may halt or reverse exposure' | first check='2026-10-10 19:40'",
+ "reply": {
+  "actors": [
+   {
+    "id": "npcs.lina_dalen",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "07:30",
+      "what": "first contact with dispatch and possible clinic"
+     }
+    ],
+    "triggers": [
+     "earlier if Imran goes missing or his condition suddenly changes"
+    ]
+   },
+   {
+    "id": "npcs.l_warren",
+    "dues": [
+     {
+      "day_offset": 2,
+      "at": "22:00",
+      "what": "agreed collection at Suds & Spin"
+     }
+    ],
+    "triggers": [
+     "earlier on a real hazard, visit or loss of access"
+    ]
+   },
+   {
+    "id": "npcs.court_runner",
+    "dues": [
+     {
+      "day_offset": 2,
+      "at": "04:00",
+      "what": "low-water window: carry status token through the bleed-drain"
+     }
+    ],
+    "triggers": [
+     "each low-water window after (mercer_pump.low_water)",
+     "if pump flow or grate blocks passage, retreat and replan after observing actual conditions"
+    ]
+   },
+   {
+    "id": "active_world_pressures.glass_spread",
+    "dues": [
+     {
+      "day_offset": 4,
+      "at": "19:40",
+      "what": "first clock check"
+     }
+    ],
+    "triggers": [],
+    "interval_minutes": 5760
+   }
+  ]
+ },
+ "error": null,
+ "secs": 5.2,
+ "max_tokens": null,
+ "wants": "json"
+}

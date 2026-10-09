@@ -1,0 +1,12 @@
+{
+ "n": 41,
+ "system_id": "f3d59b64",
+ "user": "PLAYER: I get Eli out of there and take him back to Hale Workshop through the traffic.\n\nQUESTS:\nash_beneath: Find out what happened to Eli Voss and who is sending crews below the Red Line. [available]\nfind_eli_voss: Find Eli Voss and get him somewhere safe. [active]\nlaundromat_job: Clear whatever is in the Suds & Spin basement; $400 via Pike. [active]\n\nRESULTS (decided by the program; what you record must agree with them):\nRESULT question 'Does Eli agree to leave hut 3 and ride with Rin to Hale Workshop?' → NO, BUT\nRECORDED set npcs.eli_voss.state.position \"hale_workshop\"\nRECORDED set npcs.eli_voss.state.status \"at Hale Workshop with Rin, on his own terms: nowhere that keeps records (no hospital, no police, not his own flat), he keeps the shard on him, and he will not \nRECORDED set npcs.eli_voss.state.carries \"phone (off); the shard, kept on him\"\nRECORDED set world_state.location \"hale_workshop\"\nRECORDED set world_state.environment.workshop \"shutter down; Rin and Eli inside\"",
+ "reply": {
+  "new_offer": false
+ },
+ "error": null,
+ "secs": 5.7,
+ "max_tokens": null,
+ "wants": "json"
+}

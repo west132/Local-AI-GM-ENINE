@@ -1,0 +1,13 @@
+{
+ "n": 32,
+ "system_id": "05de5aa6",
+ "user": "PLACE: Canal Street embankment relay huts — {\"character\": \"six padlocked brick relay huts on a disused rail embankment, weeds, a service road\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"locked up for the night; Rin is out\", \"embankment\": \"disused rail embankment in steady rain: six padlocked brick relay huts, weeds, a service road\"}\nTIME: 2026-10-06 21:00, night\n\nTEXT TO CHECK:\nYou knock on the shut door of hut 3 and say who sent you. For a moment there is only the rain. Then a man's voice, low and hoarse, comes from the other side of the brick, close to the door.\n\n\"Nadia doesn't send people. She'd have called.\" A pause, a shifting weight, a sharp breath through the teeth, as if standing hurts. \"I know what kind of people use her name. Go away.\"\n\nThe door doesn't move. Whoever is inside has no intention of opening it for you.\n\nFACTS (tell exactly these):\nRESULT question 'Does Eli open the door of hut 3 to Rin?' → NO, AND\nRECORDED set npcs.eli_voss.state.status \"stays shut in hut 3; would not open to a stranger and now suspects Rin may be one of Rusk's crew using Nadia's name\"",
+ "reply": {
+  "ok": true,
+  "problems": []
+ },
+ "error": null,
+ "secs": 1.2,
+ "max_tokens": null,
+ "wants": "json"
+}
