@@ -13,7 +13,8 @@ from . import clock, mechanics as M
 # AI may not write under these prefixes (program-owned)
 OWNED = (r"round", r"world_state\.time", r"player\.condition\.(hp|mp)", r"player\.money",
          r"player\.resources", r"player\.progression", r"player\.skills\.[^.]+\.(class|tier|growth_evidence|ceiling_evidence)",
-         r"trackers", r"journal", r"pending")
+         r"trackers", r"journal", r"pending", r"player\.item_points", r"player\.growth_period",
+         r"ending_conditions", r"ending_state")
 _OWNED = [re.compile(p + r"(\.|$)") for p in OWNED]
 
 
@@ -97,6 +98,9 @@ class World:
         self.tree = tree
         self.round = round_no
         _normalize_plans(tree)
+        p = tree.get("player") or {}
+        if (tree.get("enabled_modules") or {}).get("flexible_item_entitlement") and "item_points" not in p:
+            p["item_points"] = int((p.get("starting_item_points") or {}).get("points", 0))
 
     # ----- reading -----
     def get(self, path: str, default=None):
@@ -176,6 +180,8 @@ class World:
                 out.append(f"{kind}: every record must stay an object")
         if before.player.get("identity") != self.player.get("identity"):
             out.append("player.identity cannot change")
+        from . import rules
+        out += rules.quest_faults(before.tree, self.tree, bool((self.tree.get("enabled_modules") or {}).get("numeric_level_xp")))
         return out
 
     def apply(self, op: dict) -> None:

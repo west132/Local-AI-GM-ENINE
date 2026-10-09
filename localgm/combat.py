@@ -2,7 +2,7 @@
 from __future__ import annotations
 import re
 
-from . import mechanics as M
+from . import mechanics as M, rules
 from .state import World
 
 DAMAGE = {"unarmed": "1d3", "light": "1d6", "one-handed": "1d8", "two-handed": "2d6", "bow": "1d8",
@@ -26,10 +26,12 @@ def add_foes(world: World, foes: list[dict]) -> None:
         npcs.setdefault(f["id"], {"name": f["name"], "v": f["v"], "size": f["size"], "state": {}})
 
 
-def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str]]:
-    """Returns (printed lines, facts for the narrator)."""
+def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str], int]:
+    """Returns (printed lines, facts for the narrator, lasting injuries owed to the player)."""
     add_foes(world, out.get("foes", []))
-    lines, facts = [], []
+    lines, facts, owed = [], [], 0
+    lv0 = rules.level(world)
+    downed = []
     for i, ex in enumerate(out["exchanges"], 1):
         if world.player_state() != "standing":
             facts.append(f"The player is {world.player_state()}; the remaining exchanges did not happen.")
@@ -41,12 +43,12 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str]]:
             facts.append(f"{foe} is already {world.state_of(foe)}.")
             continue
         r = ex["roll"]
-        diff = M.difficulty(r["base"], r.get("conditions"))
-        tool = M.tool_mod(**{k: v for k, v in (r.get("tool") or {}).items() if k in ("fit", "condition")})
-        res = M.check(r["capability"], tool, diff, rng)
+        foe_rec = world.tree["npcs"][foe]
+        cap, tool, diff, _ = rules.roll_inputs(world, r, foe_rec.get("v"))
+        res = M.check(cap, tool, diff, rng)
         d1, d2 = res["dice"]
         win = res["success"]
-        lines.append(f"Exchange {i} vs {foe} — 2d10: {d1}+{d2} | Capability: {r['capability']:+d} | Tool: {tool:+d} | "
+        lines.append(f"Exchange {i} vs {foe} — 2d10: {d1}+{d2} | Capability: {cap:+d} | Tool: {tool:+d} | "
                      f"Total: {res['total']} | Difficulty: {diff} | {'Success' if win else 'Failure'}")
         if win:
             if ex["on_success"] == "partial":
@@ -57,6 +59,8 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str]]:
                 lines.append(f"Damage to {foe}: {how} = {raw} | HP {h['before']} → {h['hp']}"
                              + (f" — {h['state']}" if h["state"] != "standing" else ""))
                 facts.append(f"Exchange {i}: the player hits {foe} ({ex['on_success']}); {foe} is {h['state']}.")
+                if h["state"] != "standing" and not foe_rec.get("xp_paid"):
+                    downed.append(foe)
         else:
             atk = ex["attackers"]
             hits = {"setback": [], "loss": atk[:1], "severe": atk}[ex["on_failure"]]
@@ -69,11 +73,20 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str]]:
                 h = world.hurt([raw], ex.get("soak", 0), "player")
                 lines.append(f"Damage to player from {a['who']}: {how} − soak {ex.get('soak', 0)} | "
                              f"HP {h['before']} → {h['hp']}" + (f" — {h['state']}" if h["state"] != "standing" else "")
-                             + ("\nLasting injury: the program asks you to name it next turn" if h["lasting_injury"] else ""))
+                             + ("\nLasting injury" if h["lasting_injury"] else ""))
+                owed += bool(h["lasting_injury"])
                 facts.append(f"Exchange {i}: {a['who']} wounds the player; the player is {h['state']}."
                              + (" A lasting injury is owed." if h["lasting_injury"] else ""))
                 if h["state"] != "standing":
                     break
     if out.get("stop"):
         facts.append(f"Orders stop here: {out['stop']}")
-    return lines, facts
+    if downed and lv0 is not None:      # combat XP: each foe overcome, against the level held at the start, summed once
+        total = sum(M.xp_award(int(world.tree["npcs"][f].get("v", 1)), lv0, "meaningful") for f in downed)
+        st = world.player["progression"]["state"]
+        st["level"], st["xp"], ups = M.add_xp(st["level"], st["xp"], total)
+        for f in downed:
+            world.tree["npcs"][f]["xp_paid"] = True
+        world.tree["world_state"].setdefault("material_history", []).append(f"Combat in round {world.round + 1}: {', '.join(downed)} overcome.")
+        facts.append(f"The player earned {total} XP." + (f" Level up to {ups[-1]}." if ups else ""))
+    return lines, facts, owed

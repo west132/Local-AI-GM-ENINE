@@ -203,10 +203,10 @@ def test_the_real_world_is_untouched_when_a_turn_crashes():
 
 def test_quest_step_runs_without_a_minutes_field_and_trackers_are_counted_by_the_program():
     w = world()
-    llm = Scripted([{"kind": "loop", "steps": ["quest"]},
+    llm = Scripted([{"kind": "loop", "steps": ["quest"]}, {"new_offer": False},
                     {"ops": [{"op": "tracker", "path": "fish", "value": {"create": {"name": "Fish", "target": 3}}}]}, "ok", OK])
     flow.run_turn(w, llm, "I start counting fish")
-    llm = Scripted([{"kind": "loop", "steps": ["quest"]},
+    llm = Scripted([{"kind": "loop", "steps": ["quest"]}, {"new_offer": False},
                     {"ops": [{"op": "tracker", "path": "fish", "value": {"add": 9}}]}, "ok", OK])
     flow.run_turn(w, llm, "more fish")
     assert w.tree["trackers"]["fish"]["current"] == 3        # clamped at the target
@@ -265,7 +265,7 @@ def test_fight_runs_in_code():
     out = {"foes": [{"id": "thug", "name": "Thug", "v": 1, "size": "normal"}],
            "exchanges": [{"foe": "thug", "roll": {"capability": 0, "base": 10}, "on_success": "full", "my_source": "unarmed",
                           "on_failure": "loss", "attackers": [{"who": "Thug", "source": "man-sized"}]}] * 6}
-    lines, facts = combat.run(w, out, random.Random(3))
+    lines, facts, owed = combat.run(w, out, random.Random(3))
     assert any("Exchange 1" in l for l in lines) and 0 <= w.player["condition"]["hp"] <= M.max_hp(1)
 
 

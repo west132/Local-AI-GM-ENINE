@@ -1,0 +1,6 @@
+## 18. A new offer
+
+Say whether this turn brings a NEW generated offer of work whose size is not yet fixed
+(a person or faction offers an undertaking; a case or event creates one).
+Say no for: work already written in the records, a contract the player and an actor agreed in talk, the player's own plan.
+The program then rolls the shape; you write the quest to match it.

@@ -77,6 +77,7 @@ turn:
             conditions: {type: object, description: "environment|time|sensory|position|simultaneous: -1,0,1,2"}
             tool:       {type: object, properties: {fit: {type: integer}, condition: {type: integer}}}
             skill:      {type: string, description: "id of the player's skill used, if any"}
+            equipment:  {type: string, description: "item_id of the gear that directly supports this action, if any"}
             challenge:  {type: integer, minimum: 1, description: "numeric Challenge of the task, if it has one"}
             scope:      {type: string, enum: [routine, minor, meaningful, major, exceptional], description: "how much the task matters, for experience"}
             committed:  {type: boolean, description: "true if a standing order, plan or fighting style already commits the player to this risk"}
@@ -120,7 +121,7 @@ turn:
             required: [foe, roll, on_success, my_source, on_failure, attackers]
             properties:
               foe:        {type: string, description: "id of the engaged opponent"}
-              roll:       {type: object, required: [capability, base], properties: {capability: {type: integer, enum: [-4, -2, 0, 2, 4]}, base: {type: integer, minimum: 1, maximum: 20}, conditions: {type: object}, tool: {type: object}}}
+              roll:       {type: object, required: [capability, base], properties: {capability: {type: integer, enum: [-4, -2, 0, 2, 4]}, base: {type: integer, minimum: 1, maximum: 20}, conditions: {type: object}, tool: {type: object}, skill: {type: string}, equipment: {type: string}, challenge: {type: integer, minimum: 1}}}
               on_success: {type: string, enum: [partial, full, decisive]}
               my_source:  {type: string, description: "damage source of the player's blow"}
               on_failure: {type: string, enum: [setback, loss, severe]}
@@ -172,6 +173,11 @@ turn:
               value: {}
               due_in_minutes: {type: integer, minimum: 0}
         money:  {type: integer, description: "the player's cash change: negative = spent, positive = received"}
+        rest:   {type: string, enum: [none, rest, sleep], description: "rest = the time was spent resting; sleep = a full night's sleep"}
+        boundary: {type: string, enum: [none, training, aftermath], description: "a growth boundary: dedicated training or downtime, or the settled aftermath of a resolved arc (sleep counts by itself)"}
+        class_sources: {type: object, description: "skill_id -> the class source materially involved while evidence accrued (teacher, institution, method, tested innovation)"}
+        entitlement: {type: object, required: [item, tier, reason], description: "spend item points to make one unestablished detail true about the player's own gear", properties: {item: {type: string}, tier: {type: string, enum: [trivial, ordinary, T1, T2, T3, T4]}, reason: {type: string, description: "the in-world reason, consistent with every established fact"}}}
+        item_points_gain: {type: object, required: [amount, source], description: "only from an open-ended entitlement source after a major resolved achievement", properties: {amount: {type: integer, minimum: 1, maximum: 4}, source: {type: string}}}
         clocks:
           type: array
           description: "one entry for each CLOCK shown as due"
@@ -183,6 +189,17 @@ turn:
               operated: {type: boolean, description: "the process actually operated since the last check"}
               extra:    {type: boolean, description: "a plainly accelerating event, one extra segment"}
     program: commit
+
+  - id: offer
+    when: "'quest' in sort.steps"
+    rules: [18_offer]
+    input: [player_text, active_quests, results_so_far]
+    output:
+      type: object
+      required: [new_offer]
+      properties:
+        new_offer: {type: boolean}
+    program: shape_roll
 
   - id: quest
     when: "'quest' in sort.steps"
@@ -202,6 +219,31 @@ turn:
               path:  {type: string}
               value: {}
     program: commit_ops
+
+  - id: injury
+    when: "turn.injury_owed"
+    rules: [17_injury]
+    input: [player_state, results_so_far]
+    output:
+      type: object
+      required: [injury, home, effect]
+      properties:
+        injury: {type: string}
+        home:   {type: string, enum: [capability, feasibility, environment, time, sensory, position, simultaneous]}
+        effect: {type: string}
+    program: record_injury
+
+  - id: ending
+    when: "turn.module('bounded_scenario_endings') and sort.steps"
+    rules: [14_endings]
+    input: [ending_conditions, results_so_far]
+    output:
+      type: object
+      required: [met, closed]
+      properties:
+        met:    {type: array, items: {type: string}, description: "ids of conditions a resolved event has now met"}
+        closed: {type: array, items: {type: string}, description: "ids now permanently unreachable"}
+    program: ending
 
   - id: tell
     when: "not turn.halt"

@@ -8,7 +8,7 @@ import json, os, pathlib, re, sys, time
 from types import SimpleNamespace
 import yaml
 
-from . import combat, mechanics as M, schema
+from . import combat, mechanics as M, rules, schema
 from .state import World, WriteRefused
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent / "engine"
@@ -52,6 +52,12 @@ class Turn:
         self.dues_pass = 1
         self.in_fight = False
         self.final = False              # the handler is running on the AI's last allowed attempt
+        self.injury_owed = 0            # lasting injuries the player must be given (named by the AI, recorded by the program)
+        self.shape = None               # SHORT | LONG | CHAIN when a new offer's shape was rolled this turn
+        self.hidden: list[str] = []     # records changed that the narrator must not be told about
+
+    def module(self, name: str) -> bool:
+        return rules.module(self.world, name)
 
     @property
     def pending(self):
@@ -85,7 +91,7 @@ def scene(world: World, secret: bool) -> str:
         shown["doing"] = (r.get("state") or {}).get("status")
         out.append(f"PERSON {rid}: {json.dumps(shown, ensure_ascii=False)}")
     others = [f"{rid}: {r.get('name')} ({(r.get('state') or {}).get('status', '')})" for rid, r in (t.get("npcs") or {}).items()
-              if rid not in world.actors_here()]
+              if rid not in world.actors_here()] if secret else []
     if others:
         out.append("ELSEWHERE (not present): " + "; ".join(others))
     return "\n".join(out)
@@ -117,6 +123,10 @@ def inputs(step: dict, turn: Turn) -> str:
             if turn.pending:
                 parts.append("WAITING FOR THE PLAYER'S GO-AHEAD: " + turn.pending["ask"]
                              + "\n(kind=confirm if the player agrees to exactly this; anything else drops it)")
+        elif name == "ending_conditions":
+            st = w.tree.get("ending_state") or {"closed": []}
+            parts.append("ENDING CONDITIONS (id: text) — closed: " + ", ".join(st["closed"]) + "\n"
+                         + "\n".join(f"{i}: {t}" for i, t in rules.ending_list(w).items()))
         elif name == "player_state":
             p = w.player
             parts.append("YOU (the player character): " + json.dumps(
@@ -215,9 +225,8 @@ def h_roll(turn: Turn, out: dict):
     st = r["stakes"]
     if st.get("harm", "none") in ("loss", "severe") and st.get("source") not in combat.DAMAGE:
         raise M.RuleError(f"harm '{st.get('harm')}' needs stakes.source from {sorted(combat.DAMAGE)}")
-    diff = M.difficulty(r["base"], r.get("conditions"))
-    tool = M.tool_mod(**{k: v for k, v in (r.get("tool") or {}).items() if k in ("fit", "condition")})
-    pct = M.odds(r["capability"], tool, diff)
+    cap, tool, diff, _ = rules.roll_inputs(turn.world, r)
+    pct = M.odds(cap, tool, diff)
     severe = st.get("harm") == "severe"
     if not turn.in_fight and not r.get("committed") and (severe or pct < 25):
         # ODDS STOP: show the chance and the cost, roll nothing, wait for the player
@@ -238,10 +247,11 @@ def h_roll_pending(turn: Turn, out):
 def _resolve(turn: Turn, r: dict) -> None:
     """Roll the bound stakes and apply every consequence the rules attach to the result."""
     w, st = turn.world, r["stakes"]
-    diff = M.difficulty(r["base"], r.get("conditions"))
-    tool = M.tool_mod(**{k: v for k, v in (r.get("tool") or {}).items() if k in ("fit", "condition")})
-    res = M.check(r["capability"], tool, diff)
-    _roll_lines(turn, res, r["capability"], tool, diff)
+    cap, tool, diff, notes = rules.roll_inputs(w, r)
+    res = M.check(cap, tool, diff)
+    _roll_lines(turn, res, cap, tool, diff)
+    if notes:
+        turn.lines.append("Gear: " + "; ".join(notes))
     win = res["success"]
     turn.results.append(f"RESULT roll {'SUCCESS' if win else 'FAILURE'}: {st['success'] if win else st['failure']}")
     skill = r.get("skill")
@@ -249,11 +259,11 @@ def _resolve(turn: Turn, r: dict) -> None:
         gain = w.credit_skill(skill, win, diff, r.get("challenge"))
         if gain:
             turn.facts.append(f"The player's {skill} gained experience.")
-    if win and w.player.get("progression") and r.get("challenge") and r.get("scope"):
-        lv = w.player["progression"]["state"]
-        amount = M.xp_award(r["challenge"], lv["level"], r["scope"])
-        lv["level"], lv["xp"], ups = M.add_xp(lv["level"], lv["xp"], amount)
-        turn.facts.append(f"The player earned {amount} XP." + (f" Level up to {ups[-1]}." if ups else ""))
+    if win and r.get("challenge") and r.get("scope"):
+        msg = rules.award_xp(w, r["challenge"], r["scope"])
+        if msg:
+            w.tree["world_state"].setdefault("material_history", []).append(f"Event in round {w.round + 1} paid XP (scope {r['scope']}).")
+            turn.facts.append(msg)
     harm = st.get("harm", "none")
     if not win and harm in ("loss", "severe"):
         raw = []
@@ -263,14 +273,16 @@ def _resolve(turn: Turn, r: dict) -> None:
             turn.lines.append(f"Damage: {how} − soak {st.get('soak', 0)}")
         h = w.hurt(raw, st.get("soak", 0), "player")
         turn.lines.append(f"HP {h['before']} → {h['hp']}" + (f" — {h['state']}" if h["state"] != "standing" else ""))
-        turn.results.append(f"RESULT harm: the player is {h['state']}, HP {h['hp']}." + (" A lasting injury is owed (record it)." if h["lasting_injury"] else ""))
+        turn.injury_owed += bool(h["lasting_injury"])
+        turn.results.append(f"RESULT harm: the player is {h['state']}, HP {h['hp']}." + (" A lasting injury follows." if h["lasting_injury"] else ""))
     elif not win and harm == "setback":
         turn.results.append("RESULT: position worsens; no HP lost.")
 
 
 def h_combat(turn: Turn, out: dict):
     turn.in_fight = True
-    lines, facts = combat.run(turn.world, out)
+    lines, facts, owed = combat.run(turn.world, out)
+    turn.injury_owed += owed
     turn.lines += lines
     turn.results += ["RESULT " + f for f in facts]
 
@@ -300,8 +312,8 @@ def h_ask_roll(turn: Turn, out: dict):
         turn.results.append(f"RESULT question '{a['question']}' → {r['band']}")
 
 
-def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str]) -> list[str]:
-    """Money and clocks: the AI states what happened, the program does the arithmetic."""
+def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], facts: list[str]) -> list[str]:
+    """Money, clocks, rest, growth, item points: the AI states what happened, the program does the rest."""
     faults = []
     if out.get("money"):
         try:
@@ -320,28 +332,48 @@ def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str]) ->
         if res["full"]:
             new_fills.append(f"{pid} FULL — {res['on_fill']}")
     faults += [f"clock {pid} was shown as due; answer it in 'clocks'" for pid in shown if pid not in answered]
+    try:
+        if out.get("entitlement"):
+            facts.append(rules.spend_entitlement(trial, out["entitlement"]))
+        if out.get("item_points_gain"):
+            facts.append(rules.gain_entitlement(trial, out["item_points_gain"]))
+    except M.RuleError as e:
+        faults.append(f"item points: {e}")
     return faults
+
+
+def _record_lines(turn: Turn, ops: list[dict]) -> None:
+    """What the narrator may be told was recorded. Hidden records are kept from it (I5, I9)."""
+    for op in ops:
+        v = json.dumps(op.get("value"), ensure_ascii=False) if "value" in op else ""
+        line = f"RECORDED {op['op']} {op['path']} {v[:160]}"
+        (turn.hidden if rules.HIDDEN_PATH.search(op["path"]) else turn.facts).append(line)
 
 
 def h_commit(turn: Turn, out: dict):
     """D: validate everything on a copy; commit all of it or none of it."""
-    w, new_fills = turn.world, []
+    w, new_fills, facts = turn.world, [], []
     trial = w.clone()
     faults = trial.commit(out["ops"])
-    faults += _typed_changes(trial, turn, out, new_fills)
+    faults += _typed_changes(trial, turn, out, new_fills, facts)
+    minutes = int(out["minutes"]) if turn.dues_pass == 1 else 0
+    if not faults:
+        facts += rules.rest(trial, out.get("rest", "none"), minutes)
+        trial.advance(minutes)
+        if out.get("rest") == "sleep" or out.get("boundary", "none") != "none":
+            facts += rules.growth_boundary(trial, out.get("class_sources") or {})
+        facts += rules.quest_xp(trial, w.tree)
     if faults:
         raise M.RuleError("nothing was recorded. Fix:\n- " + "\n- ".join(faults))
+    days = trial.time["day_index"] - w.time["day_index"]
     w.tree = trial.tree
     turn.fills = new_fills
     for p, d in turn.dues:
         w.clear_due(p, d)
-    for op in out["ops"]:
-        v = json.dumps(op.get("value"), ensure_ascii=False) if "value" in op else ""
-        turn.facts.append(f"RECORDED {op['op']} {op['path']} {v[:160]}")
+    _record_lines(turn, out["ops"])
+    turn.facts += facts
     if out.get("money"):
         turn.facts.append(f"RECORDED cash {out['money']:+d}")
-    minutes = int(out["minutes"]) if turn.dues_pass == 1 else 0
-    days = w.advance(minutes)
     if days:
         turn.facts.append(f"{days} midnight(s) passed")
     if turn.dues_pass == 1 and (w.due() or turn.fills):      # something fell due during this action
@@ -349,12 +381,54 @@ def h_commit(turn: Turn, out: dict):
         return "again"
 
 
+def h_shape_roll(turn: Turn, out: dict):
+    """A new generated offer: the program rolls its shape (1d10: 1-7 SHORT, 8-9 LONG, 10 CHAIN)."""
+    if not out["new_offer"]:
+        return
+    n = M.roll(1, 10)[0]
+    turn.shape = "SHORT" if n <= 7 else "LONG" if n <= 9 else "CHAIN"
+    line = f"offer shape 1d10: {n} → {turn.shape}"
+    if turn.shape == "CHAIN":
+        m = M.roll(1, 4)[0]
+        line += f" · first child 1d4: {m} → {'SHORT' if m <= 3 else 'LONG'}"
+    turn.lines.append(line)
+    turn.results.append("RESULT " + line + ". Write the new quest with exactly this shape.")
+
+
 def h_commit_ops(turn: Turn, out: dict):
-    faults = turn.world.commit(out["ops"])
+    w = turn.world
+    trial = w.clone()
+    faults = trial.commit(out["ops"])
+    if not faults and turn.shape:
+        new = [q for q in (trial.tree.get("quests") or {}) if q not in (w.tree.get("quests") or {})]
+        if not new:
+            faults.append(f"a new {turn.shape} offer was rolled; write it")
+        elif trial.tree["quests"][new[0]].get("type") != turn.shape:
+            faults.append(f"the rolled shape is {turn.shape}; the new quest's type must be exactly that")
     if faults:
         raise M.RuleError("nothing was recorded. Fix:\n- " + "\n- ".join(faults))
-    for op in out["ops"]:
-        turn.facts.append(f"RECORDED {op['op']} {op['path']} {json.dumps(op.get('value'), ensure_ascii=False)[:160] if 'value' in op else ''}")
+    xp = rules.quest_xp(trial, w.tree)
+    w.tree = trial.tree
+    _record_lines(turn, out["ops"])
+    turn.facts += xp
+
+
+def h_record_injury(turn: Turn, out: dict):
+    if out["home"] not in rules.HOMES or len(out["effect"].strip()) < 8:
+        raise M.RuleError(f"home must be one of {rules.HOMES} and effect must say exactly what changes")
+    inj = turn.world.player.setdefault("condition", {}).setdefault("injuries", [])
+    for _ in range(turn.injury_owed):
+        inj.append({"injury": out["injury"], "home": out["home"], "effect": out["effect"]})
+        break
+    turn.injury_owed = 0
+    turn.facts.append(f"The player now has a lasting injury: {out['injury']}.")
+
+
+def h_ending(turn: Turn, out: dict):
+    trial = turn.world.clone()
+    facts = rules.ending_update(trial, out["met"], out["closed"])
+    turn.world.tree = trial.tree
+    turn.facts += facts
 
 
 def clean(prose: str) -> str:
@@ -381,7 +455,13 @@ def clean(prose: str) -> str:
 
 
 def h_show(turn: Turn, out: str):
-    turn.prose = clean(out)
+    prose = clean(out)
+    known = turn.text + " " + " ".join(turn.results + turn.facts)
+    terms = rules.secret_terms(turn.world, known)
+    bad = rules.leaks(prose, terms)
+    if bad and not turn.final:
+        raise M.RuleError(f"your text names {bad}, which the player has not learned. Tell it without them.")
+    turn.prose = rules.redact(prose, terms) if bad else prose
 
 
 def h_audit(turn: Turn, out: dict):
@@ -391,7 +471,8 @@ def h_audit(turn: Turn, out: dict):
 
 
 HANDLERS = {"route": h_route, "roll": h_roll, "roll_pending": h_roll_pending, "combat": h_combat, "ask_roll": h_ask_roll,
-            "commit": h_commit, "commit_ops": h_commit_ops, "show": h_show, "audit": h_audit}
+            "commit": h_commit, "shape_roll": h_shape_roll, "commit_ops": h_commit_ops, "record_injury": h_record_injury,
+            "ending": h_ending, "show": h_show, "audit": h_audit}
 
 
 # ---------- the loop ----------
@@ -460,8 +541,14 @@ def intake(world: World, llm, batch: int = 4) -> None:
                     plan["triggers"].append(plan.pop("text", None) or "re-plan at once")
 
 
+class ScenarioEnded(Exception):
+    pass
+
+
 def run_turn(world: World, llm, text: str) -> Turn:
     """Runs on a copy of the world; the real one changes only if the whole turn completes."""
+    if (world.tree.get("ending_state") or {}).get("met"):
+        raise ScenarioEnded("The scenario has ended.")
     work = world.clone()
     turn = Turn(work, text)
     steps = load_steps()
