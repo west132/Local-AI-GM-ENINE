@@ -11,8 +11,14 @@ DEFAULTS = {
     "temperature": 0.3,
     "max_tokens": 1500,
     "language": "en",
+    "api_key": "",                # backend "api" only; kept in this file, never shown again, never sent anywhere but the API address
+    "device": "auto",             # model file only: auto = use the GPU if the library has one, cpu = never
+    "threads": 0,                 # model file only: CPU threads, 0 = let the library choose
+    "merge_questions": "yes",     # yes = the world step asks its open questions in the same call (one AI call fewer per turn)
+    "check_telling": "yes",       # yes = the AI re-reads its telling against the facts (one AI call per turn)
 }
-CHOICES = {"backend": ["gguf", "server", "demo"], "language": ["en", "zh"]}
+CHOICES = {"backend": ["gguf", "server", "api", "demo"], "language": ["en", "zh"], "device": ["auto", "cpu"],
+           "merge_questions": ["yes", "no"], "check_telling": ["yes", "no"]}
 
 
 class Settings:
@@ -31,10 +37,14 @@ class Settings:
     def update(self, form: dict) -> list[str]:
         """Validate the page's values, keep the good ones, return a list of problems. Writes the file."""
         problems, new = [], dict(self.data)
+        if form.get("clear_api_key"):
+            new["api_key"] = ""
         for k, default in DEFAULTS.items():
             if k not in form:
                 continue
             raw = str(form[k]).strip()
+            if k == "api_key" and not raw:
+                continue                  # the page never shows the key, so a blank box means "keep it"
             try:
                 v = type(default)(raw) if not isinstance(default, str) else raw
                 if k in CHOICES and v not in CHOICES[k]:
@@ -45,6 +55,8 @@ class Settings:
                     raise ValueError("0 to 2")
                 if k == "max_tokens" and not 100 <= v <= 16000:
                     raise ValueError("100 to 16000")
+                if k == "threads" and not 0 <= v <= 256:
+                    raise ValueError("0 (automatic) to 256")
                 if k == "gguf" and v and not (self.models / v).is_file():
                     raise ValueError(f"{v} is not in the models folder")
                 new[k] = v
@@ -53,6 +65,16 @@ class Settings:
         self.data = new
         self.save()
         return problems
+
+    def turn_options(self) -> dict:
+        return {"merge_questions": self.data["merge_questions"] == "yes", "check_telling": self.data["check_telling"] == "yes"}
+
+    def api_key(self) -> str:
+        return self.data.get("api_key") or os.environ.get("LGM_API_KEY", "")
+
+    def key_hint(self) -> str:
+        k = self.api_key()
+        return "" if not k else "saved (…" + k[-4:] + ")" if len(k) > 8 else "saved"
 
     def save(self) -> None:
         tmp = self.path.with_suffix(".tmp")

@@ -64,7 +64,7 @@ turn:
         kind:  {type: string, enum: [fast, loop, retrieval, continuation, confirm]}
         steps: {type: array, items: {type: string, enum: [judge, fight, react, quest]},
                 description: "only the parts whose trigger fired; empty for fast, retrieval and confirm"}
-        note:  {type: string, description: "fast: what simply happens; retrieval: the answer from the records"}
+        note:  {type: string, description: "REQUIRED for fast, retrieval and continuation (the program carries it to the telling): fast = what simply happens; retrieval = the answer, from the records; continuation = what carries on and for how long"}
     program: route
 
   - id: confirmed

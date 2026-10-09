@@ -34,13 +34,22 @@ def c_sort_quiet(ai):
     t = _turn("I sit down by the window and rest my feet.")
     out = flow.run_step(ai, _step("sort"), t)
     ok = out["kind"] in ("fast", "retrieval", "continuation")
+    if ok:
+        try:
+            flow.h_route(t, out)           # the same checks the turn applies (a note is required)
+        except M.RuleError as e:
+            return False, f"the program would refuse it: {e}"
     return ok, f"sorted as {out['kind']}" + ("" if ok else " (nothing is pending and nobody is affected: expected fast)")
 
 
 def c_sort_person(ai):
     t = _turn("I ask Hobb whether he has a room for tonight.")
     out = flow.run_step(ai, _step("sort"), t)
-    return out["kind"] != "confirm", f"sorted as {out['kind']}, steps {out['steps']}"
+    try:
+        flow.h_route(t, out)
+    except M.RuleError as e:
+        return False, f"the program would refuse it: {e}"
+    return "react" in t.sort["steps"], f"sorted as {out['kind']}, steps {out['steps']} → the program ran {t.sort['steps']}" + ("" if "react" in t.sort["steps"] else " (a person is affected: the world must answer)")
 
 
 def c_judge(ai):

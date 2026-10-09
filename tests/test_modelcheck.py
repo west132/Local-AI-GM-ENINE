@@ -10,7 +10,7 @@ class Good:
             return "Hobb looks up from the desk and shakes his head slowly. The big rooms are taken, he says, but the attic is free if you don't mind the stairs, and the price is a little higher."
         form = system.split("REPLY with one JSON")[1]
         if "kind:" in form:
-            return {"kind": "fast", "steps": []}
+            return {"kind": "fast", "steps": [], "note": "It simply happens."}
         if "verdict" in form:
             return {"verdict": "certain", "cites": ["locations.harbour_guesthouse"]}
         if "asks" in form and "minutes" not in form:

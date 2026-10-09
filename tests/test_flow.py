@@ -22,7 +22,7 @@ def world(name="harbour_guesthouse"):
     return World(background_tree((ROOT / name / "background.md").read_text()))
 
 
-FAST = {"kind": "fast", "steps": []}
+FAST = {"kind": "fast", "steps": [], "note": "It simply happens."}
 OK = {"ok": True}
 LOOP_REACT = {"kind": "loop", "steps": ["react"]}
 LOOP_JUDGE = {"kind": "loop", "steps": ["judge"]}

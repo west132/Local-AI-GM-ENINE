@@ -221,6 +221,9 @@ def _run_step(llm, step: dict, turn: Turn, extra: str = ""):
             continue
         if sch.get("type") == "string":
             return str(out).strip()
+        if isinstance(out, dict) and out.get("asks") and "asks" in sch.get("properties", {}):      # asking first: nothing is decided yet, so nothing is required
+            out.setdefault("minutes", 0)
+            out.setdefault("ops", [])
         errs = schema.validate(out, sch)
         if not errs:
             return out
@@ -244,15 +247,41 @@ def addressed(world: World, text: str) -> list[str]:
             if any(len(w) >= 3 and re.search(r"\b" + re.escape(w) + r"\b", low) for w in str(r.get("name", "")).lower().split())]
 
 
+def player_sheet(world: World) -> str:
+    """What the player's character has, knows and is working on: the records a retrieval answers from."""
+    p = world.player
+    mine = {k: p.get(k) for k in ("identity", "skills", "condition", "equipment", "money", "item_points", "resources", "knowledge", "fighting_style", "routines") if k in p}
+    quests = "\n".join(f"{q}: {r.get('objective', '')[:160]} [{r.get('status')}]" for q, r in (world.tree.get("quests") or {}).items()
+                       if isinstance(r, dict) and r.get("status") in ("available", "active", "completed", "failed", "abandoned", "blocked"))
+    return "THE PLAYER CHARACTER'S RECORDS (answer only from these and from what the scene shows):\n" + json.dumps(mine, ensure_ascii=False) + "\nQUESTS:\n" + (quests or "none")
+
+
+QUIET = ("fast", "retrieval", "continuation")
+
+
 def h_route(turn: Turn, out: dict):
     if out["kind"] == "confirm" and not turn.pending:     # nothing was offered: a "confirm" would skip every step and the world would not be told
         raise M.RuleError("nothing is waiting for the player's confirmation, so kind 'confirm' is wrong. Sort what the player does: "
                           "fast, loop, retrieval or continuation (name the steps whose trigger fired)")
+    note = str(out.get("note") or "").strip()
+    if out["kind"] in QUIET and not note:                 # the sorter's decision is carried to the telling, so it must be written down
+        raise M.RuleError(f"kind '{out['kind']}' needs `note`: " + {"fast": "what simply happens", "retrieval": "the answer, from the records",
+                                                                      "continuation": "what carries on and for how long"}[out["kind"]])
+    steps = list(dict.fromkeys(out.get("steps", [])))      # a step named twice runs once
     # Someone else is affected (section 6) whenever the player names a person who is here: that is never a fast action.
-    if addressed(turn.world, turn.text) and out["kind"] in ("fast", "retrieval", "continuation") and "react" not in out["steps"]:
-        out = {**out, "kind": "loop", "steps": out["steps"] + ["react"]}
-    out = {**out, "steps": list(dict.fromkeys(out.get("steps", [])))}      # a step named twice runs once
+    if addressed(turn.world, turn.text) and out["kind"] in QUIET:
+        out = {**out, "kind": "loop"}
+        if "react" not in steps:
+            steps.append("react")
+    # Carrying on takes time and the world keeps moving: the world step runs (minutes, dues, who answers) whatever the sorter wrote.
+    if out["kind"] == "continuation" and "react" not in steps:
+        steps.append("react")
+    out = {**out, "steps": steps}
     turn.sort = out
+    if note and out["kind"] in QUIET:
+        turn.facts.append(f"THE GM'S DECISION (from sorting; tell it, add nothing that changes the world): {note}")
+    if out["kind"] == "retrieval":
+        turn.facts.append(player_sheet(turn.world))
     if turn.pending and out["kind"] != "confirm":
         turn.world.tree.pop("pending", None)          # the player changed their mind: dropped at no cost
         turn.facts.append("The earlier risky action was dropped; nothing was rolled.")
@@ -758,16 +787,19 @@ class ScenarioEnded(Exception):
     pass
 
 
-def run_turn(world: World, llm, text: str) -> Turn:
-    """Runs on a copy of the world; the real one changes only if the whole turn completes."""
+def run_turn(world: World, llm, text: str, merge_questions: bool = False, check_telling: bool = True) -> Turn:
+    """Runs on a copy of the world; the real one changes only if the whole turn completes.
+    merge_questions: the world step asks its open questions itself instead of a separate call first (one call fewer per turn).
+    check_telling: the audit call after the telling (off = one call fewer per turn)."""
     if (world.tree.get("ending_state") or {}).get("met"):
         raise ScenarioEnded("The scenario has ended.")
     work = world.clone()
     turn = Turn(work, text)
     steps = load_steps()
     byid = {s["id"]: s for s in steps}
+    skip = ({"wonder"} if merge_questions else set()) | (set() if check_telling else {"audit"})
     for step in steps:
-        if not _when(step["when"], turn):
+        if step["id"] in skip or not _when(step["when"], turn):
             continue
         again = None
         for _ in range(8):              # a handler may ask for another pass: more results, a due that fell, a retelling

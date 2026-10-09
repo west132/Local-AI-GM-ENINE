@@ -104,7 +104,7 @@ def home() -> bytes:
         for g in APP.games()) or '<p class="mut">No games yet.</p>'
     opts = "".join(f'<option value="{w}">{w}</option>' for w in APP.worlds())
     model = APP.settings.data
-    where = {"gguf": f"model file: {model['gguf'] or 'first in models folder'}", "server": f"server: {model['url']}", "demo": "demo (no AI)"}[model["backend"]]
+    where = {"gguf": f"model file: {model['gguf'] or 'first in models folder'}", "server": f"server: {model['url']}", "api": f"API: {model['url']} · {model['model'] or 'default model'}", "demo": "demo (no AI)"}[model["backend"]]
     body = f'''<h1>Your games</h1>{rows}
 <h1>New game</h1><form class="card" method="post" action="/new" enctype="application/x-www-form-urlencoded">
 <label>Game name</label><input name="name" required pattern="[A-Za-z0-9_\\-]+" title="letters, numbers, - and _" placeholder="my_game">
@@ -137,11 +137,20 @@ def settings_page(msg="", errs=()) -> bytes:
     notes = "".join(f'<p class="bad">{html.escape(e)}</p>' for e in errs) + (f'<p style="color:var(--acc)">{html.escape(msg)}</p>' if msg else "")
     body = f'''<h1>Settings</h1>{notes}<form class="card" method="post" action="/settings">
 <label>Where the AI runs</label>{sel("backend", S.CHOICES["backend"], d["backend"])}
-<p class="mut">gguf = a model file you put in the <code>models</code> folder · server = LM Studio / Ollama · demo = no AI, just to try the app</p>
+<p class="mut">gguf = a model file you put in the <code>models</code> folder, run inside this app · server = LM Studio / Ollama on this or another PC · api = an online service that needs an API key · demo = no AI, just to try the app</p>
 <label>Model file (in the models folder — {len(files)} found)</label>{sel("gguf", [""] + files, d["gguf"])}
-<label>Server address (LM Studio default shown)</label><input name="url" value="{html.escape(d["url"])}">
-<label>Server model name (blank = whatever is loaded)</label><input name="model" value="{html.escape(d["model"])}">
+<label>Run the model file on</label>{sel("device", S.CHOICES["device"], d["device"])}
+<p class="mut">cpu = never use a graphics card (slow but works anywhere) · auto = use one if the library can</p>
+<label>CPU threads (0 = automatic)</label><input name="threads" type="number" min="0" max="256" value="{d["threads"]}">
+<label>Server or API address (LM Studio default shown)</label><input name="url" value="{html.escape(d["url"])}">
+<label>Model name (blank = whatever the server has loaded)</label><input name="model" value="{html.escape(d["model"])}">
+<label>API key (api / server with a key)</label><input name="api_key" type="password" autocomplete="off" placeholder="{html.escape(APP.settings.key_hint() or "not set")}">
+<p class="mut">Leave blank to keep the saved key. It is stored in settings.json on this PC and sent only to the address above. <label style="display:inline"><input type="checkbox" name="clear_api_key" value="1"> remove the saved key</label></p>
 <label>Context size (tokens, model file only)</label><input name="ctx" type="number" value="{d["ctx"]}">
+<label>Fewer AI calls per turn</label>{sel("merge_questions", S.CHOICES["merge_questions"], d["merge_questions"])}
+<p class="mut">yes = the world step asks its open questions in the same call · helps slow computers</p>
+<label>AI re-reads its telling</label>{sel("check_telling", S.CHOICES["check_telling"], d["check_telling"])}
+<p class="mut">no = skip the self-check call (faster, a little less careful)</p>
 <label>Temperature (0–2)</label><input name="temperature" type="number" step="0.05" value="{d["temperature"]}">
 <label>Longest single reply (tokens)</label><input name="max_tokens" type="number" value="{d["max_tokens"]}">
 <label>Language</label>{sel("language", S.CHOICES["language"], d["language"])}
@@ -280,7 +289,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send(settings_page("Saved." if not errs else "", errs))
             if parts == ["settings", "check"]:
                 for k, v in f.items():
-                    if k in ("backend", "url", "model", "gguf"):
+                    if k in ("backend", "url", "model", "gguf", "device"):
                         APP.settings.data[k] = v          # check what is on the page; Save is still the player's choice
                 started = APP.start("check", "check", lambda: {"check": modelcheck.run(APP.model(), lambda i, n: APP.job.update(step=n))})
                 return self.json({"started": started}) if started else self.send(b"The AI is busy with another job.", 409, "text/plain")
@@ -314,17 +323,19 @@ class H(BaseHTTPRequestHandler):
         probe.data = dict(APP.settings.data)
         try:
             for k, v in f.items():
-                if k in probe.data and k in ("backend", "url", "model", "gguf"):
+                if k in probe.data and k in ("backend", "url", "model", "gguf") or (k == "api_key" and v):
                     probe.data[k] = v
-            if probe.data["backend"] == "server":
-                ms = backend.probe(probe.data["url"])
-                return f"Connected. Models on the server: {', '.join(ms) or 'none loaded'}"
+            if probe.data["backend"] in ("server", "api"):
+                if probe.data["backend"] == "api" and not probe.api_key():
+                    return "This needs an API key: enter it above and press Save."
+                ms = backend.probe(probe.data["url"], probe.api_key())
+                return f"Connected. Models available: {', '.join(ms[:12]) or 'none loaded'}"
             if probe.data["backend"] == "demo":
                 return "Demo mode: no AI is used."
             files = probe.ggufs()
             return f"Found {len(files)} model file(s): {', '.join(files)}" if files else "No .gguf file in the models folder yet."
         except Exception as e:
-            return f"Cannot reach it: {e}"
+            return "Cannot reach it: " + str(e).replace(probe.api_key() or "\0", "…")
 
     def new_game(self, f):
         name = pathlib.Path(f["name"]).name
@@ -382,7 +393,7 @@ class H(BaseHTTPRequestHandler):
         g = APP.open(name)
 
         def run():
-            t = flow.run_turn(g.world, APP.model(), text)
+            t = flow.run_turn(g.world, APP.model(), text, **APP.settings.turn_options())
             hdr = header(g.world)
             g.log({"input": text, "sort": t.sort, "lines": t.lines, "facts": t.facts, "events": t.events, "prose": t.prose, "header": hdr})
             g.save()

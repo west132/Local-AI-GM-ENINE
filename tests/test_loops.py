@@ -2,7 +2,7 @@
 import pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 import pytest
-from localgm import flow, mechanics as M
+from localgm import combat, flow, mechanics as M
 from test_flow import world, force_check, FAST, roll_form, OK
 
 
@@ -77,6 +77,7 @@ def test_every_step_in_steps_yaml_runs_in_a_real_turn(monkeypatch):
 
 def test_a_fight_turn_goes_through_the_whole_loop(monkeypatch):
     force_check(monkeypatch, True)
+    monkeypatch.setattr(combat, "damage_roll", lambda source, rng=None: (20, "1d8 (forced) = 20"))
     w = world()
     t, bot = run(w, "I hit the rat", sort={"kind": "loop", "steps": ["fight", "react"]},
                  fight={"foes": [{"id": "rat", "name": "rat", "v": 1, "size": "small"}], "stop": "x", "kill": True,
@@ -126,3 +127,33 @@ def test_any_stray_exception_from_a_reply_becomes_a_retry(monkeypatch):
     monkeypatch.setitem(flow.HANDLERS, "commit", flaky)
     t, _ = run(w, sort={"kind": "loop", "steps": ["react"]})
     assert len(calls) >= 2 and w.round == 1
+
+
+def test_the_sorters_decision_reaches_the_telling():
+    w = world()
+    t, bot = run(w, "I put the envelope on the desk", sort={"kind": "fast", "steps": [], "note": "The envelope lies on the desk, squared to its edge."})
+    assert any("THE GM'S DECISION" in f and "squared to its edge" in f for f in t.facts)
+    from localgm import flow as F
+    tell = next(s for s in F.load_steps() if s["id"] == "tell")
+    assert "squared to its edge" in F.inputs(tell, t)
+
+
+def test_a_quiet_kind_without_a_note_is_sent_back():
+    w = world()
+    t, bot = run(w, sort=[{"kind": "fast", "steps": []}, {"kind": "fast", "steps": [], "note": "ok"}])
+    assert bot.seen.count("sort") == 2 and t.sort["note"] == "ok"
+
+
+def test_a_retrieval_is_answered_from_the_records_the_program_hands_over():
+    w = world()
+    t, _ = run(w, "What am I carrying?", sort={"kind": "retrieval", "steps": [], "note": "A rucksack, a sealed envelope and a phone."})
+    text = "\n".join(t.facts)
+    assert "THE PLAYER CHARACTER'S RECORDS" in text and "sealed_envelope" in text and "QUESTS" in text
+
+
+def test_carrying_on_takes_time_and_the_world_answers():
+    w = world()
+    before = (w.time["day_index"], w.time["clock_minutes"])
+    t, bot = run(w, "I wait for an hour", sort={"kind": "continuation", "steps": [], "note": "An hour passes at the desk."},
+                 react={"asks": [], "minutes": 60, "ops": []})
+    assert "react" in t.ran and (w.time["day_index"], w.time["clock_minutes"]) > before and w.time["clock_minutes"] == before[1] + 60
