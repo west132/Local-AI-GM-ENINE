@@ -55,12 +55,12 @@ def hp_max(w: World, who: str = "player") -> int:
 
 
 def rest(w: World, kind: str, minutes: int) -> list[str]:
-    """kind rest: a quarter of max HP (min 1) per full hour. sleep: full HP, full MP. Injuries stay."""
+    """kind rest: a quarter of max HP (min 1) per full hour. sleep: full HP. MP by the setting's recovery. Injuries stay."""
     if kind == "none":
         return []
     cond = w.player.setdefault("condition", {})
-    if w.player_state() == "dead":
-        return []
+    if w.player_state() == "dead" or cond.get("down") == "down":
+        return []                                  # someone who is down needs treatment, not rest
     top = hp_max(w)
     hp = int(cond.get("hp", top))
     if kind == "sleep":
@@ -70,9 +70,11 @@ def rest(w: World, kind: str, minutes: int) -> list[str]:
     out = []
     if new != hp:
         cond["hp"] = new
-        cond.pop("down", None)
+        if new > 0:
+            for k in ("down", "down_since", "down_checked", "stable"):
+                cond.pop(k, None)
         out.append(f"The player recovered to HP {new}/{top}.")
-    return out
+    return out + mp_recover(w, kind, minutes)
 
 
 def growth_boundary(w: World, sources: dict[str, str]) -> list[str]:
@@ -90,7 +92,7 @@ def growth_boundary(w: World, sources: dict[str, str]) -> list[str]:
             out.append(f"Skill {name} was raised to {g['class_raised']} through {src}.")
     gp = w.player.setdefault("growth_period", {})
     gp["opened"], gp["credited"] = w.time["day_index"], []
-    return out
+    return out + injury_boundary(w)
 
 
 # ---------- XP ----------
@@ -313,3 +315,168 @@ def redact(prose: str, terms: set[str]) -> str:
     """Last resort: drop every sentence that names a secret."""
     sents = re.findall(r"[^.!?。！？\n]+[.!?。！？]*[\"”')]*\s*|\n+", prose)
     return "".join(s for s in sents if not leaks(s, terms)).strip()
+
+
+# ---------- MP and casting (10.5) ----------
+
+def powers(w: World) -> dict[str, tuple[str, int]]:
+    """MP-drawing powers the setting names -> (skill that holds it, the power's tier number)."""
+    draws = ((w.tree.get("setting_anchors") or {}).get("mp_powers") or {}).get("draws_mp") or []
+    out = {}
+    for pid in draws:
+        for sk, s in (w.player.get("skills") or {}).items():
+            for ab in s.get("abilities") or []:
+                if str(ab).strip().startswith(pid):
+                    m = re.search(r"\bT([1-4])\b", str(ab))
+                    out[pid] = (sk, int(m.group(1)) if m else 1)
+    return out
+
+
+def mp_max(w: World) -> int | None:
+    held = powers(w)
+    if not held:
+        return None
+    bonus = max(M.TIER_BONUS[w.player["skills"][sk]["tier"]] for sk, _ in held.values())
+    return 2 * _vitality(w) + 4 * bonus
+
+
+def _vitality(w: World) -> int:
+    rec = w.player
+    if level(w) is not None:
+        return level(w)
+    return VITALITY.get(rec.get("vitality", "ordinary"), 1)
+
+
+def mp_now(w: World) -> int:
+    top = mp_max(w) or 0
+    return int(w.player.setdefault("condition", {}).get("mp", top))
+
+
+def can_cast(w: World, pid: str) -> int:
+    """Cost of casting power `pid` now, or a RuleError saying why not."""
+    held = powers(w)
+    if pid not in held:
+        raise M.RuleError(f"{pid!r} is not an MP-drawing power of this world: {sorted(held) or 'none'}")
+    sk, tier = held[pid]
+    if tier > M.TIER_BONUS[w.player["skills"][sk]["tier"]]:
+        raise M.RuleError(f"{pid} is above the caster's skill tier")
+    cost = M.cast_cost(f"T{tier}")
+    if mp_now(w) < cost:
+        raise M.RuleError(f"{pid} costs {cost} MP; the player has {mp_now(w)}")
+    return cost
+
+
+def cast(w: World, pid: str) -> int:
+    cost = can_cast(w, pid)
+    w.player["condition"]["mp"] = mp_now(w) - cost          # paid whether or not it works
+    return cost
+
+
+def mp_recover(w: World, kind: str, minutes: int) -> list[str]:
+    top = mp_max(w)
+    if top is None or kind == "none":
+        return []
+    mode = (((w.tree.get("setting_anchors") or {}).get("mp_powers") or {}).get("recovery")) or "rest_only"
+    now = mp_now(w)
+    if kind == "sleep" or (mode == "fast" and minutes >= 10):
+        new = top
+    elif mode == "slow":
+        new = min(top, now + max(1, top // 4) * (minutes // 60))
+    else:
+        new = now
+    if new != now:
+        w.player["condition"]["mp"] = new
+        return [f"The player's MP is {new}/{top}."]
+    return []
+
+
+# ---------- healing and treatment (10.5) ----------
+
+HEAL_DICE = {"minor": (2, 6), "standard": (4, 6), "T1": (1, 8), "T2": (2, 6), "T3": (3, 6), "T4": (4, 6)}
+
+
+def heal_target(w: World, who: str, source: str) -> tuple[str, str]:
+    """Apply a healing item or power. Returns (printed line, fact). Healing stabilises first."""
+    _, cond, top = w._vitals(who)
+    hp = int(cond.get("hp", top))
+    if source == "stabilise":
+        if cond.get("down") != "down":
+            raise M.RuleError(f"{who} is not down")
+        cond["stable"] = True
+        return f"{who} stabilised", f"{who} was stabilised (will not die of the wound)."
+    if source == "strong":
+        gain, how = top, "full"
+    elif source in HEAL_DICE:
+        n, sides = HEAL_DICE[source]
+        d = M.roll(n, sides)
+        gain, how = sum(d), f"{n}d{sides} ({'+'.join(map(str, d))})"
+    else:
+        raise M.RuleError(f"healing source must be stabilise, strong or one of {sorted(HEAL_DICE)}")
+    new = M.heal(hp, top, gain)
+    cond["hp"] = new
+    if new > 0:
+        for k in ("down", "down_since", "down_checked", "stable"):
+            cond.pop(k, None)
+    return f"Healing {who}: {how} | HP {hp} → {new}", f"{who} was healed to HP {new}."
+
+
+def treat_injury(w: World, action: str, injury: str, deep: bool) -> str:
+    inj = next((i for i in w.player.get("condition", {}).get("injuries", []) if injury.lower() in i["injury"].lower()), None)
+    if not inj:
+        raise M.RuleError(f"the player has no lasting injury like {injury!r}")
+    if action == "start":
+        inj["treatment_since"] = w.minutes_now()
+        inj["days_needed"] = 7 if deep else 3
+        return f"Treatment of {inj['injury']} began ({inj['days_needed']} days needed)."
+    inj.pop("treatment_since", None)
+    return f"Treatment of {inj['injury']} stopped."
+
+
+def injury_boundary(w: World) -> list[str]:
+    """At a growth boundary: injuries whose treatment has run its full time are removed."""
+    out, keep = [], []
+    for i in w.player.get("condition", {}).get("injuries", []):
+        done = i.get("treatment_since") is not None and w.minutes_now() - i["treatment_since"] >= i.get("days_needed", 3) * 1440
+        if done:
+            out.append(f"The player's {i['injury']} has healed.")
+        else:
+            keep.append(i)
+    if out:
+        w.player["condition"]["injuries"] = keep
+    return out
+
+
+# ---------- supplies (15) ----------
+
+DIE = ["d12", "d10", "d8", "d6", "d4"]
+
+
+def draw(w: World, rid: str, amount: int = 1) -> str:
+    res = (w.player.get("resources") or {}).get(rid)
+    if not res:
+        raise M.RuleError(f"no resource {rid!r}; the player has {sorted(w.player.get('resources') or {})}")
+    if res.get("tracking") == "exact":
+        if int(res.get("count", 0)) < amount:
+            raise M.RuleError(f"only {res.get('count', 0)} {res['name']} left")
+        res["count"] = int(res["count"]) - amount
+        return f"{res['name']}: {res['count']} left."
+    die = res.get("usage_die")
+    if die == "empty":
+        raise M.RuleError(f"{res['name']} is exhausted")
+    r = M.roll(1, int(die[1:]))[0]
+    if r <= 2:
+        res["usage_die"] = DIE[DIE.index(die) + 1] if die != "d4" else "empty"
+    return f"{res['name']}: usage {die} rolled {r}" + (f" → {res['usage_die']}" if res["usage_die"] != die else " (no change)")
+
+
+def resupply(w: World, rid: str, die: str | None, count: int | None) -> str:
+    res = (w.player.get("resources") or {}).get(rid)
+    if not res:
+        raise M.RuleError(f"no resource {rid!r}")
+    if res.get("tracking") == "exact":
+        res["count"] = int(res.get("count", 0)) + int(count or 0)
+    else:
+        if die not in DIE or (res.get("usage_die") in DIE and DIE.index(die) >= DIE.index(res["usage_die"])):
+            raise M.RuleError(f"a resupply must raise the die above {res.get('usage_die')}: one of {DIE}")
+        res["usage_die"] = die
+    return f"{res['name']} resupplied."

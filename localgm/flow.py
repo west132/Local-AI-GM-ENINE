@@ -225,6 +225,8 @@ def h_roll(turn: Turn, out: dict):
     st = r["stakes"]
     if st.get("harm", "none") in ("loss", "severe") and st.get("source") not in combat.DAMAGE:
         raise M.RuleError(f"harm '{st.get('harm')}' needs stakes.source from {sorted(combat.DAMAGE)}")
+    if r.get("cast"):
+        rules.can_cast(turn.world, r["cast"])        # RuleError sends the AI back: it cannot cast that now
     cap, tool, diff, _ = rules.roll_inputs(turn.world, r)
     pct = M.odds(cap, tool, diff)
     severe = st.get("harm") == "severe"
@@ -248,6 +250,9 @@ def _resolve(turn: Turn, r: dict) -> None:
     """Roll the bound stakes and apply every consequence the rules attach to the result."""
     w, st = turn.world, r["stakes"]
     cap, tool, diff, notes = rules.roll_inputs(w, r)
+    if r.get("cast"):
+        cost = rules.cast(w, r["cast"])
+        notes.append(f"{r['cast']} costs {cost} MP ({rules.mp_now(w)} left)")
     res = M.check(cap, tool, diff)
     _roll_lines(turn, res, cap, tool, diff)
     if notes:
@@ -312,7 +317,7 @@ def h_ask_roll(turn: Turn, out: dict):
         turn.results.append(f"RESULT question '{a['question']}' → {r['band']}")
 
 
-def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], facts: list[str]) -> list[str]:
+def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], facts: list[str], lines: list[str]) -> list[str]:
     """Money, clocks, rest, growth, item points: the AI states what happened, the program does the rest."""
     faults = []
     if out.get("money"):
@@ -333,6 +338,15 @@ def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], fa
             new_fills.append(f"{pid} FULL — {res['on_fill']}")
     faults += [f"clock {pid} was shown as due; answer it in 'clocks'" for pid in shown if pid not in answered]
     try:
+        for h in out.get("heal", []):
+            line, fact = rules.heal_target(trial, h["who"], h["source"])
+            lines.append(line); facts.append(fact)
+        for t in out.get("treat", []):
+            facts.append(rules.treat_injury(trial, t["action"], t["injury"], t.get("deep", False)))
+        for d in out.get("draw", []):
+            lines.append(rules.draw(trial, d["resource"], d.get("amount", 1)))
+        for r_ in out.get("resupply", []):
+            facts.append(rules.resupply(trial, r_["resource"], r_.get("die"), r_.get("count")))
         if out.get("entitlement"):
             facts.append(rules.spend_entitlement(trial, out["entitlement"]))
         if out.get("item_points_gain"):
@@ -352,14 +366,18 @@ def _record_lines(turn: Turn, ops: list[dict]) -> None:
 
 def h_commit(turn: Turn, out: dict):
     """D: validate everything on a copy; commit all of it or none of it."""
-    w, new_fills, facts = turn.world, [], []
+    w, new_fills, facts, lines = turn.world, [], [], []
     trial = w.clone()
     faults = trial.commit(out["ops"])
-    faults += _typed_changes(trial, turn, out, new_fills, facts)
+    faults += _typed_changes(trial, turn, out, new_fills, facts, lines)
     minutes = int(out["minutes"]) if turn.dues_pass == 1 else 0
     if not faults:
         facts += rules.rest(trial, out.get("rest", "none"), minutes)
         trial.advance(minutes)
+        for e in trial.down_checks():            # down and untreated for an hour
+            d1, d2 = e["dice"]
+            lines.append(f"{e['who']} down for an hour — 2d10: {d1}+{d2} → {'wakes at 1 HP' if e['woke'] else 'dies'}")
+            facts.append(f"{e['who']} {'came round at 1 HP' if e['woke'] else 'died of the untreated wound'}.")
         if out.get("rest") == "sleep" or out.get("boundary", "none") != "none":
             facts += rules.growth_boundary(trial, out.get("class_sources") or {})
         facts += rules.quest_xp(trial, w.tree)
@@ -372,6 +390,7 @@ def h_commit(turn: Turn, out: dict):
         w.clear_due(p, d)
     _record_lines(turn, out["ops"])
     turn.facts += facts
+    turn.lines += lines
     if out.get("money"):
         turn.facts.append(f"RECORDED cash {out['money']:+d}")
     if days:

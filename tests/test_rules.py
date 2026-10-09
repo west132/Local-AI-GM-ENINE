@@ -242,3 +242,122 @@ def test_records_of_hidden_things_are_not_handed_to_the_narrator():
     t, llm = run_react(w, ops=ops)
     told = llm.seen[-2][1]                                    # the telling step's prompt
     assert "tense" in told and "silence" not in told
+
+
+# ---------- MP, casting, recovery ----------
+
+def test_max_mp_and_the_cost_of_a_cast_are_paid_even_when_the_cast_fails(monkeypatch):
+    force_check(monkeypatch, False)
+    w = world("ashfall_hunter")
+    assert rules.mp_max(w) == w.player["condition"]["mp"] == 16               # 2*4 + 4*2, as BACKGROUND says
+    llm = Scripted([LOOP_JUDGE, roll_form(cast="demonic_surge", committed=True), "ok", OK])
+    flow.run_turn(w, llm, "I let the demon blood surge")
+    assert w.player["condition"]["mp"] == 10                                   # T2 power: 3 x 2 = 6, spent although it failed
+
+
+def test_a_cast_without_enough_mp_or_an_unknown_power_goes_back_to_the_ai():
+    w = world("ashfall_hunter")
+    w.player["condition"]["mp"] = 5
+    llm = Scripted([LOOP_JUDGE, roll_form(cast="demonic_surge"), {"verdict": "impossible", "reason": "no power left"}, "ok", OK])
+    flow.run_turn(w, llm, "surge")
+    assert "costs 6 MP" in llm.seen[2][1] and w.player["condition"]["mp"] == 5
+    llm = Scripted([LOOP_JUDGE, roll_form(cast="fireball"), {"verdict": "impossible", "reason": "no such power"}, "ok", OK])
+    flow.run_turn(w, llm, "fireball")
+    assert "not an MP-drawing power" in llm.seen[2][1]
+
+
+@pytest.mark.parametrize("mode,kind,minutes,expect", [("fast", "rest", 10, 16), ("fast", "rest", 5, 4), ("slow", "rest", 120, 12),
+                                                      ("rest_only", "rest", 600, 4), ("rest_only", "sleep", 480, 16)])
+def test_mp_recovers_by_the_settings_own_mode(mode, kind, minutes, expect):
+    w = world("ashfall_hunter")
+    w.tree["setting_anchors"]["mp_powers"]["recovery"] = mode
+    w.player["condition"]["mp"] = 4
+    rules.mp_recover(w, kind, minutes)
+    assert w.player["condition"]["mp"] == expect
+
+
+# ---------- down, treatment, survival ----------
+
+def _clock(monkeypatch, total):
+    monkeypatch.setattr(M, "roll", lambda n, sides, rng=None: [total // 2, total - total // 2][:n] if n == 2 else [total])
+
+
+def test_down_for_an_hour_untreated_rolls_for_survival(monkeypatch):
+    w = world()
+    w.hurt([99])                                                  # down (not dead: 99 on a standing character leaves 0 HP)
+    assert w.player_state() == "down"
+    _clock(monkeypatch, 14)
+    run_react(w, minutes=30)
+    assert w.player_state() == "down"                             # only half an hour: no roll yet
+    t, _ = run_react(w, minutes=45)
+    assert w.player["condition"]["hp"] == 1 and w.player_state() == "standing" and any("wakes at 1 HP" in l for l in t.lines)
+
+
+def test_a_failed_survival_roll_is_death_and_treatment_prevents_it(monkeypatch):
+    w = world()
+    w.hurt([99])
+    _clock(monkeypatch, 6)
+    run_react(w, minutes=90)
+    assert w.player_state() == "dead"
+    w2 = world()
+    w2.hurt([99])
+    run_react(w2, minutes=5, heal=[{"who": "player", "source": "stabilise"}])
+    run_react(w2, minutes=120)
+    assert w2.player_state() == "down"                            # stabilised: no survival roll
+    run_react(w2, minutes=5, heal=[{"who": "player", "source": "strong"}])
+    assert w2.player_state() == "standing" and w2.player["condition"]["hp"] == rules.hp_max(w2)
+
+
+def test_healing_a_standing_person_is_capped_at_their_maximum(monkeypatch):
+    w = world()
+    top = rules.hp_max(w)
+    w.player["condition"]["hp"] = top - 1
+    _clock(monkeypatch, 12)
+    rules.heal_target(w, "player", "standard")
+    assert w.player["condition"]["hp"] == top
+
+
+def test_a_lasting_injury_heals_only_after_real_treatment_for_its_full_time():
+    w = world()
+    w.player["condition"]["injuries"] = [{"injury": "cracked ribs", "home": "position", "effect": "position +1 on twisting actions"},
+                                         {"injury": "broken wrist", "home": "capability", "effect": "capability -2 on grip work"}]
+    run_react(w, minutes=480, rest="sleep")
+    assert len(w.player["condition"]["injuries"]) == 2            # rest never removes an injury
+    run_react(w, minutes=10, treat=[{"injury": "ribs", "action": "start"}, {"injury": "wrist", "action": "start", "deep": True}])
+    run_react(w, minutes=3 * 1440 + 60, rest="sleep")
+    left = w.player["condition"]["injuries"]
+    assert [i["injury"] for i in left] == ["broken wrist"]        # 3 days for ribs; 7 for the deep one
+    run_react(w, minutes=5 * 1440, rest="sleep")
+    assert w.player["condition"]["injuries"] == []
+
+
+def test_treating_an_injury_the_player_does_not_have_goes_back_to_the_ai():
+    w = world()
+    llm = ByKind(LOOP_REACT, react(treat=[{"injury": "ghost", "action": "start"}]), react())
+    flow.run_turn(w, llm, "x")
+    assert any("no lasting injury like" in u for _, u in llm.seen)
+
+
+# ---------- supplies ----------
+
+def test_usage_die_steps_down_on_a_low_roll_and_exhausts(monkeypatch):
+    w = world("ashfall_hunter")
+    res = w.player["resources"]["first_aid_supplies"]
+    monkeypatch.setattr(M, "roll", lambda n, sides, rng=None: [1])
+    for expect in ("d4", "empty"):
+        rules.draw(w, "first_aid_supplies")
+        assert res["usage_die"] == expect
+    with pytest.raises(M.RuleError):
+        rules.draw(w, "first_aid_supplies")
+    with pytest.raises(M.RuleError):
+        rules.resupply(w, "first_aid_supplies", "d4", None)           # exhausted -> d4 is a rise, allowed
+        rules.resupply(w, "first_aid_supplies", "d4", None)           # but not "refilling" to the same die
+    assert res["usage_die"] == "d4"
+    monkeypatch.setattr(M, "roll", lambda n, sides, rng=None: [5])
+    rules.draw(w, "first_aid_supplies")
+    assert res["usage_die"] == "d4"                                   # a high roll costs nothing
+
+
+def test_the_ai_cannot_write_supplies_directly():
+    w = world("ashfall_hunter")
+    assert w.commit([{"op": "set", "path": "player.resources.first_aid_supplies.usage_die", "value": "d12"}])

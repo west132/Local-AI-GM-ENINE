@@ -351,10 +351,36 @@ class World:
         r = M.harm(before, hp_max, damage, soak)
         cond["hp"] = r["hp"]
         if r["state"] == "standing":
-            cond.pop("down", None)
+            cond.pop("down", None); cond.pop("down_since", None); cond.pop("stable", None)
         else:
             cond["down"] = r["state"]
+            cond.setdefault("down_since", self.minutes_now())
         return {**r, "before": before}
+
+    def minutes_now(self) -> int:
+        return self.time["day_index"] * 1440 + self.time["clock_minutes"]
+
+    def down_checks(self, rng=None) -> list[dict]:
+        """Down and untreated for an hour: 2d10, 11+ wakes at 1 HP, else dies (once). Treatment first stabilises."""
+        out = []
+        who_all = ["player"] + [k for k, r in (self.tree.get("npcs") or {}).items() if isinstance(r, dict)]
+        for who in who_all:
+            _, cond, _top = self._vitals(who)
+            if cond.get("down") != "down" or cond.get("stable") or cond.get("down_checked"):
+                continue
+            if self.minutes_now() - int(cond.get("down_since", self.minutes_now())) < 60:
+                continue
+            dice = M.roll(2, 10, rng)
+            woke = sum(dice) >= 11
+            cond["down_checked"] = True
+            if woke:
+                cond["hp"] = 1
+                for k in ("down", "down_since", "down_checked"):
+                    cond.pop(k, None)
+            else:
+                cond["down"] = "dead"
+            out.append({"who": who, "dice": dice, "woke": woke})
+        return out
 
     def state_of(self, who: str) -> str:
         _, cond, hp_max = self._vitals(who)

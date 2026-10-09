@@ -16,7 +16,13 @@ Status of each V5 rule in the running program. A line here is true only if a tes
 | Skill evidence from a win, once per skill per period | implemented | `test_a_failed_roll_costs_hp…` |
 | Skill tier and class growth at a boundary (sleep, training, aftermath); class needs a source; new period | implemented | `test_sleep_is_a_growth_boundary…`, `test_class_rises_only_with_a_valid_source`. Player only; companions are not tracked |
 | XP: event, combat (once per foe, level at the start) and quest (once, stored) | implemented | `test_a_won_roll_with_a_challenge…`, `test_combat_xp…`, `test_completing_a_quest_pays_its_xp_once`. Event XP has no per-event id guard beyond the single roll |
-| Rest and sleep recovery of HP | implemented | `test_rest_heals…`. MP recovery and casting cost: not yet |
+| Rest and sleep recovery of HP; someone who is down needs treatment, not rest | implemented | `test_rest_heals…` |
+| MP: maximum, cost of a cast (paid even if it fails, power tier ≤ skill tier), recovery by the setting's mode (fast / slow / rest_only) | implemented | `test_max_mp_and_the_cost…`, `test_a_cast_without…`, `test_mp_recovers…` |
+| Down for an hour untreated → 2d10 survival roll; stabilising or healing prevents it | implemented | `test_down_for_an_hour…`, `test_a_failed_survival_roll…` |
+| Healing items and powers (dice by source, capped at maximum) | implemented | `test_healing_a_standing_person…` |
+| Lasting-injury healing: only after real treatment for its full time (3 days, 7 if deep), settled at a growth boundary | implemented | `test_a_lasting_injury_heals_only_after…` |
+| Supplies: exact counts, usage die (low roll steps it down, empty is exhausted, resupply must raise it) | implemented | `test_usage_die_steps_down…` |
+| Payoffs (`pending_payoffs`), fatigue, food and water, equipment condition, acquisition | AI judgement per the rule files | the AI writes the records; the program only protects cash, supplies and the other program-owned fields. Nothing checks a payoff is not paid twice |
 | Lasting injuries: the AI names it (home must be one of the seven), the program records it | implemented | `test_a_heavy_hit_makes_the_ai_name_an_injury…`. Whether the effect is then counted once is the AI's judgement (I8) |
 | Quests: required fields and enums, one open MAIN, closed stays closed, immutable level, child refs, level required for SHORT in numeric worlds | implemented | `test_quest_rules_are_enforced_on_commit` |
 | New generated offer: the program rolls the shape; the quest must match | implemented | `test_a_new_offer_is_rolled…` |
@@ -32,5 +38,4 @@ Status of each V5 rule in the running program. A line here is true only if a tes
 | Sorting floor: naming a person who is here is never a fast action | implemented | `test_naming_a_person…` |
 | Open-question rules (yes/no, likelihood needs a fact) | implemented | `test_wh_question…` |
 | Fights (exchanges, damage, soak, down/dead) | partial | `combat.py`; morale and per-attacker budgets are the AI's judgement |
-| Down untreated for an hour (survival roll), lasting-injury healing over time | not yet | |
 | Real-model play over a long campaign | not tested | only a 3B coding model has been run, for a few turns |
