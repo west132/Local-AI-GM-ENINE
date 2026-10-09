@@ -297,3 +297,25 @@ def test_a_fight_against_a_bystander_who_was_never_attacked_is_sent_back():
     bad = dict(good, foes=[], exchanges=[dict(good["exchanges"][0], foe="hobb_marren")])
     t, bot = run(w, "I attack the rat", sort={"kind": "loop", "steps": ["fight", "react"]}, fight=[bad, good])
     assert bot.seen.count("fight") == 2 and w.state_of("hobb_marren") == "standing"
+
+
+def test_every_ai_step_ends_its_message_with_a_task_and_the_sorter_sees_no_secrets():
+    w = world("ashfall_hunter")
+    tasks = flow.load_tasks()
+    steps = [s for s in flow.load_steps() if s.get("ai") is not False]
+    assert {s["id"] for s in steps} <= set(tasks), {s["id"] for s in steps} - set(tasks)
+    seen = {}
+    class Spy:
+        def ask(self, system, user, schema=None, max_tokens=None):
+            seen["user"], seen["system"] = user, system
+            raise ValueError("stop")
+    for s in steps:
+        t = flow.Turn(w, "I ask Nadia for the locator")
+        try:
+            flow.run_step(Spy(), s, t)
+        except ValueError:
+            pass
+        assert seen["user"].rstrip().endswith(tasks[s["id"]].strip()[-60:]) or "YOUR TASK NOW" in seen["user"], s["id"]
+        assert seen["user"].index("YOUR TASK NOW") >= len(flow.inputs(s, t)), s["id"]          # the task comes after every record the step shows
+        if s["id"] == "sort":
+            assert "drives" not in seen["user"] and "knowledge" not in seen["user"] and len(seen["system"]) < 9000

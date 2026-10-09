@@ -97,7 +97,7 @@ def c_tell(ai):
     t.facts.append('RECORDED set npcs.hobb_marren.state.status "offers the attic room only, for a higher price"')
     text = flow.clean(flow.run_step(ai, _step("tell"), t))
     words = len(text.split())
-    echoed = rules.norm(t.text) in rules.norm(text) or "FACTS" in text or "RECORDED" in text or "{" in text
+    echoed = rules.norm(t.text) in rules.norm(text) or "FACTS" in text or "WHAT IS TRUE" in text or "WHAT HAPPENED" in text or "RECORDED" in text or "{" in text
     ok = 12 <= words <= flow.MAX_WORDS and not echoed
     return ok, f"{words} words" + (" (it repeated the instructions or the player's line instead of telling the scene)" if echoed else "")
 

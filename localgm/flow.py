@@ -28,6 +28,16 @@ def load_steps() -> list[dict]:
     return _yaml()["turn"]
 
 
+_TASKS = None
+
+
+def load_tasks() -> dict:
+    global _TASKS
+    if _TASKS is None:
+        _TASKS = yaml.safe_load((ENGINE / "tasks.yaml").read_text(encoding="utf-8"))
+    return _TASKS
+
+
 def load_intake() -> dict:
     return _yaml()["intake"]
 
@@ -152,7 +162,7 @@ def inputs(step: dict, turn: Turn) -> str:
             parts.append(f"PLAYER: {turn.text}")
         elif name in ("place", "actors_present"):
             if not scene_done:               # the place and who is in it are shown once, however many names ask for them
-                parts.append(scene(w, secret=step["id"] != "tell" and step["id"] != "audit"))
+                parts.append(scene(w, secret=step["id"] not in ("tell", "audit", "sort")))     # sorting needs who is here, not their secrets
                 scene_done = True
         elif name == "records_in_play":
             parts.append(brief(w))
@@ -197,7 +207,7 @@ def inputs(step: dict, turn: Turn) -> str:
         elif name == "results_so_far":
             parts.append("RESULTS (decided by the program; what you record must agree with them):\n" + ("\n".join(turn.results + turn.facts) or "none"))
         elif name == "facts_from_program":
-            parts.append("FACTS (tell exactly these):\n" + "\n".join(turn.results + turn.facts))
+            parts.append("WHAT IS TRUE NOW:\n" + "\n".join(turn.results + turn.facts))
         elif name == "prose":
             parts.append("TEXT TO CHECK:\n" + turn.prose)
         elif name == "dues_fired":
@@ -226,12 +236,14 @@ def run_step(llm, step: dict, turn: Turn, extra: str = ""):
 
 def _run_step(llm, step: dict, turn: Turn, extra: str = ""):
     sch, errs = schema.cap_arrays(step["output"]), []
+    task = load_tasks().get(step["id"], "").strip()
+    task = ("\n\nYOUR TASK NOW:\n" + task) if task else ""       # the instruction comes last, after the records
     system = rules_text(step["rules"])
     if sch.get("type") != "string":
         system += "\n\nREPLY with one JSON object only:\n" + schema.render(sch)
     for _ in range(2):
         try:
-            out = llm.ask(system, inputs(step, turn) + extra, None if sch.get("type") == "string" else sch,
+            out = llm.ask(system, inputs(step, turn) + task + extra, None if sch.get("type") == "string" else sch,
                           max_tokens=step.get("max_tokens"))
         except ValueError as e:      # the reply was not JSON at all
             errs, extra = [f"not valid JSON ({e})"], extra + "\n\nYour last reply was not valid JSON. Reply with the JSON object only."
@@ -311,7 +323,7 @@ def h_route(turn: Turn, out: dict):
     out = {**out, "steps": steps}
     turn.sort = out
     if note and out["kind"] in QUIET:
-        turn.facts.append(f"THE GM'S DECISION (from sorting; tell it, add nothing that changes the world): {note}")
+        turn.facts.append(f"THE GM'S DECISION: {note}")
     if out["kind"] == "retrieval":
         turn.facts.append(player_sheet(turn.world))
     if turn.pending and out["kind"] != "confirm":
@@ -634,7 +646,7 @@ def h_commit(turn: Turn, out: dict):
         w.clear_due(p, d)
     _record_lines(turn, out["ops"])
     _events(turn, out["ops"])
-    turn.facts.append("WHAT HAPPENED (the GM's account of the accepted events; tell it, add nothing that changes the world): " + report)
+    turn.facts.append("WHAT HAPPENED: " + report)
     turn.facts += facts
     turn.lines += lines
     if out.get("money"):
@@ -741,7 +753,7 @@ def h_show(turn: Turn, out: str):
         if not turn.final:
             raise M.RuleError("your text contains the program's labels (THE GM'S DECISION, WHAT HAPPENED, RESULT…). Tell the scene itself, in your own words, without any label.")
         prose = clean(_LABELS.sub("", prose))
-    account = " ".join(re.sub(r"^[A-Z' ]+(\([^)]*\))?:\s*", "", f) for f in turn.facts if f.startswith("WHAT HAPPENED"))
+    account = " ".join(f[len("WHAT HAPPENED:"):] for f in turn.facts if f.startswith("WHAT HAPPENED:"))
     norm = lambda x: re.sub(r"\W+", " ", x).lower().strip()
     if account.strip() and not turn.final and norm(account) in norm(prose) and len(prose.split()) < len(account.split()) + 12:
         raise M.RuleError("you only copied the account. Tell it as a scene: what is seen, heard and said, with the people acting and speaking.")

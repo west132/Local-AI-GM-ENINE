@@ -55,7 +55,7 @@ intake:
 turn:
   - id: sort
     when: always
-    rules: [01_jobs, 02_directive, 03_invariants, 05_player_side, 06_sorting, 19_play_lessons]
+    rules: [05_player_side, 06_sorting, 19_play_lessons]
     input: [player_who, player_text, place, active_quests, pending]
     output:
       type: object

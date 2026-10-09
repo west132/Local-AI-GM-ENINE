@@ -1,0 +1,91 @@
+# What each AI call is asked to do RIGHT NOW. The program puts this last in the message, after the records, because it is the instruction the
+# model must act on; the rule files before it are what to judge by. Examples use made-up content so they are not copied into the game.
+sort: |
+  Sort the player's action (the PLAYER line) and fill the form. Choose one kind:
+  - fast: the player's own ordinary action, safe and certain, nobody else involved. steps = []. note = what simply happens, one or two sentences.
+  - retrieval: the player only asks what they have, know or see. steps = []. note = the answer, taken from the records.
+  - continuation: wait, carry on, travel, a routine. steps = []. note = what carries on and for how long.
+  - loop: anything else: another person is spoken to or affected, the outcome is uncertain or risky, something lasting changes, or the player goes somewhere.
+    steps = the parts needed, from: judge (is it possible, certain or uncertain), fight (violence), react (the world and the people answer), quest (a job, lead or promise).
+    Always include react when a person is spoken to or affected.
+  - confirm: ONLY if "WAITING FOR THE PLAYER'S GO-AHEAD" is shown above and the player agrees to exactly that.
+  Examples (other game):
+    PLAYER "I put the lamp on the shelf"            -> {"kind":"fast","steps":[],"note":"The lamp sits on the shelf."}
+    PLAYER "What coins do I have?"                  -> {"kind":"retrieval","steps":[],"note":"Four silver and a copper, from your purse."}
+    PLAYER "I ask the smith if he can mend my sword" -> {"kind":"loop","steps":["react"],"note":"The smith is asked."}
+    PLAYER "I try to climb the wall and I draw my knife if a guard comes" -> {"kind":"loop","steps":["judge","react"],"note":"A climb that could fail."}
+  Reply with the JSON object only.
+
+judge: |
+  Decide whether the player's action works, using the records above. Cite the exact record paths you rely on (see RECORDS YOU CAN CITE).
+  - certain: the records settle that it works (an ordinary step of their trade, an unlocked door). verdict certain, cites, reason in one sentence.
+  - impossible: the records rule it out (no such item, no way there, a hard limit). verdict impossible, cites, reason.
+  - roll: it could honestly go either way and it depends on the PLAYER'S OWN skill or luck (a lock, a climb, a chase). Fill `roll`: subject, capability, base,
+    skill, and stakes: what success and failure each mean, and harm (none, setback, loss, severe).
+  - ask: it depends on what a PERSON decides or knows (will she show it? does he agree?). verdict ask, and `asks`: yes/no questions ending in "?".
+    For each: obvious = "YES - why" or "NO - why" when the records already settle it (nothing is rolled), else "none".
+  - If the action has a real cost, danger or irreversible step that the player's own orders do not answer, fill `decision` (the question and 2-5 options with their costs).
+  Never roll something another person decides. Never decide the result of a roll yourself.
+  Reply with the JSON object only.
+
+wonder: |
+  List the yes/no questions about what PEOPLE decide, know or do that the records do NOT settle and that matter for this action.
+  Each question: ends in "?"; obvious = "YES - why" or "NO - why" if the records settle it (then nothing is rolled), otherwise "none";
+  likelihood -3..+3 from the records (never from what the player needs); cites = exact record paths. No question about the player's own actions.
+  If nothing is open, reply {"asks": []}. Example: {"asks":[{"question":"Does the smith agree to mend the sword today?","obvious":"none","likelihood":1,"cites":["npcs.smith.drives"]}]}
+  Reply with the JSON object only.
+
+react: |
+  Say what happens in the world because of the player's action and the RESULTS above. Every person acts from their own record, not from what the player wants.
+  1. If you still need an answer first, fill `asks` (yes/no questions ending in "?", each with obvious/likelihood/cites) and leave the rest empty.
+  2. Otherwise fill: `report` (plain sentences: who did what and why, only what the player can see, hear or learn), `minutes`, and `ops`:
+     each change with its exact path (see RECORDS YOU CAN CITE), `because`, `channel` if a person learns something, and `requires` {on, answer} on any path a RESULT governs.
+     Add money, rest, heal, moved_to and the other typed fields only if that happened. Do not repeat a change that is already recorded.
+  Never overrule a RESULT. Failure stays failure.
+  Reply with the JSON object only.
+
+fight: |
+  The player is fighting. Fill the form.
+  - foes: opponents that are NOT yet in the records (a creature or enemy in the scene): each with a NEW id, name, v (level) and size. Never put a person from the records here.
+  - exchanges: one entry per exchange the player's order covers (an order to kill covers exchanges until the foe is down; set kill true). Each: foe (a foe id), roll (capability, base, skill, equipment, conditions),
+    on_success, on_failure, my_source, attackers who can hit back.
+  - Never target someone the player did not attack.
+  Reply with the JSON object only.
+
+offer: |
+  Did this action make a genuinely new job, lead or promise available to the player? new_offer true or false. Most actions: false.
+  Reply with the JSON object only.
+
+quest: |
+  Record the quest changes this action and its RESULTS show (accepted, progressed, completed, failed, abandoned) as ops on the quests, with exact paths. Nothing the RESULTS do not support.
+  If nothing changed, reply {"ops": []}.
+  Reply with the JSON object only.
+
+injury: |
+  The player took a lasting injury. Name it (injury), choose where it acts (home) and state exactly what changes (effect, at least a clause). Do not invent a second injury.
+  Reply with the JSON object only.
+
+ending: |
+  List in `met` the ids of ending conditions a resolved event has now met, and in `closed` the ids now permanently out of reach. If none, both empty.
+  Reply with the JSON object only.
+
+checkpoint: |
+  Close only what the records show is settled (a quest whose objective was met, a right whose terms are done). Each closing is an op with the path and `because`. Leave live things open and say why in notes.
+  Reply with the JSON object only.
+
+tell: |
+  Write what the player sees and hears now: a short scene of about 80-200 words, present tense, second person ("you"). Tell what happens from THE GM'S DECISION / WHAT HAPPENED and the RESULTS above;
+  people speak in their own voices (quoted dialogue); add the place's atmosphere. Stop where the player must decide. Do not repeat the player's words, do not add an event, a fact or a reward that is not above,
+  do not use labels, lists or headings. Reply with the scene text only.
+
+audit: |
+  Check TEXT TO CHECK against the FACTS and RESULTS. ok = false only if the text adds an event, fact or reward that is not in them, contradicts them, speaks or decides for the player, or reveals what the player has not learned.
+  problems = each fault in a few words. Otherwise ok = true.
+  Reply with the JSON object only.
+
+epilogue: |
+  The story has ended. Write a closing recap of about 150-300 words: how it ended and what the main people and places become, from the records and story so far. Add no new facts. Reply with the text only.
+
+intake: |
+  Convert each plan note into dues (a moment on the clock: day_offset from TODAY, a time, what happens) and triggers (conditions with no clock). Copy what the note says; invent nothing.
+  Reply with the JSON object only.
