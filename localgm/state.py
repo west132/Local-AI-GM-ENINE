@@ -15,7 +15,7 @@ OWNED = (r"round", r"world_state\.time", r"player\.condition\.(hp|mp)", r"player
          r"player\.resources", r"player\.progression", r"player\.skills\.[^.]+\.(class|tier|growth_evidence|ceiling_evidence)",
          r"trackers", r"journal", r"pending", r"player\.item_points", r"player\.growth_period",
          r"ending_conditions", r"ending_state", r"resolved",
-         r"npcs\.[^.]+\.capability\.(tracked|overall_level|xp)", r"(npcs|factions)\.[^.]+\.(work_source|temper)")
+         r"npcs\.[^.]+\.capability\.(tracked|overall_level|xp)", r"(npcs|factions)\.[^.]+\.(work_source|temper)", r"calendar")
 _OWNED = [re.compile(p + r"(\.|$)") for p in OWNED]
 
 
@@ -98,22 +98,25 @@ def _every_days(v) -> int:
     return {"daily": 1, "weekly": 7, "monthly": 30, "fortnightly": 14}.get(str(v).strip().lower(), 7)
 
 
-_LEAD = re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2}|dawn|morning|noon|midday|afternoon|dusk|evening|night|midnight)\b[\s,:\-]*(.*)$",
-                   re.I | re.S)
-_ANY_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_TIME = r"\d{1,2}:\d{2}|dawn|morning|noon|midday|afternoon|dusk|evening|night|midnight"
+_TOKENS: dict = {}
 
 
-def _day_of(t: dict, y: int, mo: int, d: int) -> int | None:
-    m0 = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", str(t.get("date") or ""))
-    if not m0:
-        return None
+def _token(cal) -> "re.Pattern":
+    """A date in the world's calendar, with the time that may follow it."""
+    if cal.pattern not in _TOKENS:
+        _TOKENS[cal.pattern] = re.compile(cal.pattern + rf"(?:[ T,]+(?P<t>{_TIME})\b)?", re.I)
+    return _TOKENS[cal.pattern]
+
+
+def _day_of(t: dict, cal, y, mo, d) -> int | None:
+    """The day_index of a written date, from today's date and day_index; None if either date is not in this calendar."""
+    base = clock.date_ordinal(cal, t.get("date"))
     try:
-        return t["day_index"] + (_dt.date(y, mo, d) - _dt.date(*map(int, m0.groups()))).days
+        n = cal.ordinal_of(y, mo, d)
     except ValueError:
         return None
-
-
-_DATE_TOKEN = re.compile(r"(\d{4})-(\d{2})-(\d{2})(?:[ T]+(\d{1,2}:\d{2}|dawn|morning|noon|midday|afternoon|dusk|evening|night|midnight)\b)?", re.I)
+    return None if base is None else t["day_index"] + (n - base)
 
 
 def _tidy(text: str) -> str:
@@ -121,39 +124,43 @@ def _tidy(text: str) -> str:
     return re.sub(r"^(?:,|;)\s*", "", text)
 
 
-def parse_note(note: str, t: dict, move: str = ""):
-    """A plan note is clauses split by ';'. The calendar is the program's one calendar, written 'YYYY-MM-DD [HH:MM | dawn | noon …]'.
-    A clause with such a date is a due on the clock (no time given: morning); the words around the date are what happens.
-    A clause with no date and no clock time is a trigger (a condition). Any other kind of calendar or clock time: return None
-    and the one-time intake step reads the note, its dates then checked against this text (dates_in)."""
+def parse_note(note: str, t: dict, move: str = "", cal=None):
+    """A plan note is clauses split by ';'. Dates are written in the world's calendar (the default is 'YYYY-MM-DD'; a world may
+    define its own table, see clock.Custom), optionally followed by 'HH:MM' or dawn/noon/…. A clause with a date is a due on the
+    clock (no time given: morning); the words around the date are what happens. A clause with no date and no clock time is a
+    trigger (a condition). A clock time with no date, or a date the calendar cannot read: return None and the one-time intake
+    step reads the note, its dates then checked against this text (dates_in)."""
+    cal = cal or clock.Gregorian()
+    tok = _token(cal)
     dues, trig = [], []
     for clause in [c.strip() for c in str(note).split(";") if c.strip()]:
-        found = list(_DATE_TOKEN.finditer(clause))
+        found = list(tok.finditer(clause))
         if found:
-            what = _tidy(_DATE_TOKEN.sub("", clause)) or move
+            what = _tidy(tok.sub("", clause)) or move
             for m in found:
-                day = _day_of(t, int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                day = _day_of(t, cal, m["y"], m["mo"], m["d"])
                 try:
-                    at = at_minutes(m.group(4) or "morning")
+                    at = at_minutes(m["t"] or "morning")
                 except ValueError:
                     return None
                 if day is None:
                     return None
                 dues.append({"day": day, "clock": at, "what": what})
         elif re.search(r"\d{1,2}:\d{2}", clause):
-            return None          # a clock time with no date in the program's calendar
+            return None          # a clock time with no date in the calendar
         else:
             trig.append(clause)
     return dues, trig
 
 
-def dates_in(note: str, t: dict) -> list[tuple[int, int | None]]:
-    """Every 'YYYY-MM-DD [HH:MM]' written in a note as (day_index, clock minutes or None): what the AI's answer must contain."""
+def dates_in(note: str, t: dict, cal=None) -> list[tuple[int, int | None]]:
+    """Every date written in a note as (day_index, clock minutes or None): what the AI's answer must contain."""
+    cal = cal or clock.Gregorian()
     out = []
-    for m in re.finditer(r"(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2}:\d{2}))?", str(note)):
-        day = _day_of(t, int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    for m in re.finditer(cal.pattern + r"(?:\s+(?P<t>\d{1,2}:\d{2}))?", str(note), re.I):
+        day = _day_of(t, cal, m["y"], m["mo"], m["d"])
         if day is not None:
-            out.append((day, at_minutes(m.group(4)) if m.group(4) else None))
+            out.append((day, at_minutes(m["t"]) if m["t"] else None))
     return out
 
 
@@ -170,22 +177,22 @@ def clock_interval(pace: str) -> int | None:
     return n * {"hour": 60, "night": 1440, "day": 1440, "week": 10080, "month": 43200}[m.group(2).lower()]
 
 
-def _normalize_clocks(tree: dict) -> None:
+def _normalize_clocks(tree: dict, cal) -> None:
     """A pressure's first check written as 'YYYY-MM-DD HH:MM' with a pace 'every N units' is read here, not by the AI."""
     t = tree["world_state"]["time"]
     for pr in (tree.get("active_world_pressures") or {}).values():
         c = pr.get("clock") if isinstance(pr, dict) else None
         if not isinstance(c, dict) or c.get("due_at") or not c.get("due"):
             continue
-        m = re.match(r"^\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2})\s*$", str(c["due"]))
+        m = re.fullmatch(r"\s*" + cal.pattern + r"\s+(?P<t>\d{1,2}:\d{2})\s*", str(c["due"]), re.I)
         iv = clock_interval(c.get("pace", ""))
-        day = _day_of(t, *map(int, m.groups()[:3])) if m else None
+        day = _day_of(t, cal, m["y"], m["mo"], m["d"]) if m else None
         if m and iv and day is not None:
-            c["due_at"] = {"day": day, "clock": at_minutes(m.group(4))}
+            c["due_at"] = {"day": day, "clock": at_minutes(m["t"])}
             c["interval_minutes"] = iv
 
 
-def _normalize_plans(tree: dict) -> None:
+def _normalize_plans(tree: dict, cal) -> None:
     """BACKGROUND writes an actor's plan as state.plan + state.due (free text). Make one plan record:
     {move, dues:[{day, clock, what}], triggers:[text]}. A single plain ISO due is converted here; anything
     else is kept as `text` for the one-time intake step (flow.intake) to split."""
@@ -200,7 +207,7 @@ def _normalize_plans(tree: dict) -> None:
                 continue
             plan = {"move": st.pop("plan"), "dues": [], "triggers": []}
             due = st.pop("due", None)
-            parsed = parse_note(str(due), t, plan["move"]) if due else None
+            parsed = parse_note(str(due), t, plan["move"], cal) if due else None
             if parsed:                                   # every clause is a plain clock time or a plain condition: the program reads it
                 plan["dues"], plan["triggers"] = parsed
             elif due:                                    # a date buried in a sentence: the one-time intake step reads it, and its dates are checked
@@ -212,8 +219,9 @@ class World:
     def __init__(self, tree: dict, round_no: int = 0):
         self.tree = tree
         self.round = round_no
-        _normalize_plans(tree)
-        _normalize_clocks(tree)
+        self.cal = clock.calendar_from(tree)          # raises ValueError with the reason if the calendar table is wrong
+        _normalize_plans(tree, self.cal)
+        _normalize_clocks(tree, self.cal)
         self.ensure_work()
         p = tree.get("player") or {}
         if (tree.get("enabled_modules") or {}).get("flexible_item_entitlement") and "item_points" not in p:
@@ -356,7 +364,7 @@ class World:
 
     # ----- program-owned changes -----
     def advance(self, minutes: int) -> int:
-        new, days = clock.advance(self.time, minutes)
+        new, days = clock.advance(self.time, minutes, self.cal)
         self.tree["world_state"]["time"] = new
         return days
 

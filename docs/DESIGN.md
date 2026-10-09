@@ -23,3 +23,28 @@ stay the AI's judgement. They are visible in the journal (`journal.jsonl`: `even
 
 Model limits belong in the backend (prompts, retries, output format), never in the rules: a small model gets narrower tasks,
 not permission to break them.
+
+
+## Calendars
+
+Time is the program's. A BACKGROUND writes every date in one of two ways:
+
+1. Nothing special: `YYYY-MM-DD` (a fantasy world may use a year like `0482`).
+2. Its own calendar, as a table the program computes from:
+
+```yaml
+calendar:
+  era: Year                       # printed before the year
+  months:                         # the whole year, in order
+    - {name: Thawmonth, days: 30}
+    - {name: Floodmonth, days: 31}
+    - {name: Harvestwane, days: 29}
+  leap: {every: 4, month: Thawmonth, extra: 1}     # optional
+  weekdays: [Moonday, Fireday, Starday]            # optional
+  start_weekday: Fireday                           # weekday of day 1 of month 1 of year 1
+```
+
+Dates are then written `Year 318, Floodmonth 6` (and `… 18:30`, `… dawn`) in `world_state.time.date`, plan notes (`state.due`) and pressure
+first checks. `localgm/clock.py` turns them into day numbers, adds days across months, years and leap days, and prints them back. The AI is never asked to
+convert or count a date; if it has to read a plan note at all, every date in the note must come back on the right day. The table is the program's
+(`calendar` cannot be edited by the AI). The generator can fill the table from the idea and checks every date it writes against it.

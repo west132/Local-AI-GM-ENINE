@@ -697,7 +697,7 @@ def _check_dates(world: World, a: dict) -> None:
             got.append((base + int(d["day_offset"]), at_minutes(d["at"])))
         except (ValueError, KeyError):
             pass
-    for day, clock_ in dates_in(note, world.time):
+    for day, clock_ in dates_in(note, world.time, world.cal):
         if not any(g[0] == day and (clock_ is None or g[1] == clock_) for g in got):
             when = f"day_offset {day - base}" + (f" at {clock_ // 60:02d}:{clock_ % 60:02d}" if clock_ is not None else "")
             raise ValueError(f"the note gives a date that is {when}; no due of yours is on it")

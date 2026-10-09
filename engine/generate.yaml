@@ -49,6 +49,18 @@ stages:
         excludes: {type: array, items: {type: string}}
         tone: {type: string, minLength: 3}
         style: {type: string, minLength: 3}
+        calendar:           # only for a world with its own calendar; omit for YYYY-MM-DD
+          type: object
+          required: [months]
+          properties:
+            era: {type: string}
+            months:
+              type: array
+              minItems: 1
+              items: {type: object, required: [name, days], properties: {name: {type: string}, days: {type: integer, minimum: 1, maximum: 100}}}
+            leap: {type: object, required: [every, month, extra], properties: {every: {type: integer, minimum: 2}, month: {type: string}, extra: {type: integer, minimum: 1}}}
+            weekdays: {type: array, items: {type: string}}
+            start_weekday: {type: string}
         start:
           type: object
           required: [date, clock, daypart, season, weather]

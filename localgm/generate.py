@@ -3,7 +3,7 @@ sends the faults back for a fix, and writes the file itself. Nothing the AI says
 from __future__ import annotations
 import datetime as dt, json, pathlib, re, yaml
 
-from . import rules as R, schema
+from . import clock, rules as R, schema
 from .state import World, background_tree, _ISO_DUE
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent / "engine"
@@ -29,11 +29,25 @@ def full_name(n: str) -> bool:
     return len(parts) >= 2
 
 
-def _when(text: str):
+def cal_of(premise: dict):
+    """The world's calendar: its own table if the premise gave one, else YYYY-MM-DD."""
+    return clock.Custom(premise["calendar"]) if premise.get("calendar") else clock.Gregorian()
+
+
+def _when(text: str, cal):
+    """(day ordinal, minutes) of 'DATE HH:MM ...' written in the calendar, else None; tuples compare in time order."""
+    m = re.match(r"\s*" + cal.pattern + r"[ T,]+(?P<t>\d{1,2}):(?P<m>\d{2})", str(text), re.I)
+    if not m:
+        return None
     try:
-        return dt.datetime.strptime(text.strip()[:16], "%Y-%m-%d %H:%M")
+        return cal.ordinal_of(m["y"], m["mo"], m["d"]), int(m["t"]) * 60 + int(m["m"])
     except ValueError:
         return None
+
+
+def _example(cal, start: str) -> str:
+    n = clock.date_ordinal(cal, start)
+    return f"{cal.fmt(n + 1) if n else 'a date'} 18:30"
 
 
 def _is_trigger(text: str) -> bool:
@@ -49,9 +63,12 @@ def check_premise(o: dict, ctx: dict) -> list[str]:
     if o["mode"] == "canon" and not o.get("canon_scope", "").strip():
         out.append("mode canon needs canon_scope")
     try:
-        dt.datetime.strptime(o["start"]["date"], "%Y-%m-%d")
-    except ValueError:
-        out.append("start.date must be YYYY-MM-DD")
+        cal = cal_of(o)
+    except ValueError as e:
+        return out + [f"calendar: {e}"]
+    if clock.date_ordinal(cal, o["start"]["date"]) is None:
+        out.append("start.date must be a real date in the world's calendar" + ("" if o.get("calendar") else " written YYYY-MM-DD")
+                   + (f", e.g. {cal.fmt(1000)}" if o.get("calendar") else ""))
     if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", o["start"]["clock"]):
         out.append("start.clock must be HH:MM")
     for m in MODULES:
@@ -130,7 +147,8 @@ def check_places(o: dict, ctx: dict) -> list[str]:
 
 def check_cast(o: dict, ctx: dict) -> list[str]:
     out, places = [], {slug(x["id"]) for x in ctx["places"]["locations"]}
-    start = _when(ctx["premise"]["start"]["date"] + " " + ctx["premise"]["start"]["clock"])
+    cal = cal_of(ctx["premise"])
+    start = _when(ctx["premise"]["start"]["date"] + " " + ctx["premise"]["start"]["clock"], cal)
     ids = [slug(n["id"]) for n in o["npcs"]]
     out += [f"duplicate person id {i}" for i in set(ids) if ids.count(i) > 1]
     for n in o["npcs"]:
@@ -141,9 +159,9 @@ def check_cast(o: dict, ctx: dict) -> list[str]:
             out.append(f"{who}: gender must be a plain word such as man, woman, nonbinary")
         if slug(n["position"]) not in places:
             out.append(f"{who}: position {n['position']!r} is not a place id ({sorted(places)})")
-        w = _when(n["due"])
+        w = _when(n["due"], cal)
         if w is None and not _is_trigger(n["due"]):
-            out.append(f"{who}: due {n['due']!r} must read 'YYYY-MM-DD HH:MM what happens' or 'when <condition>'")
+            out.append(f"{who}: due {n['due']!r} must read '{_example(cal, ctx['premise']['start']['date'])} what happens' (a real date in the calendar) or 'when <condition>'")
         elif w is not None and start and w < start:
             out.append(f"{who}: due {n['due']!r} is before the story starts")
     return out
@@ -152,7 +170,8 @@ def check_cast(o: dict, ctx: dict) -> list[str]:
 def check_story(o: dict, ctx: dict) -> list[str]:
     out = []
     people = {slug(n["id"]) for n in ctx["cast"]["npcs"]} | {slug(f["id"]) for f in ctx["cast"]["factions"]} | {slug(ctx["player"]["name"])}
-    start = _when(ctx["premise"]["start"]["date"] + " " + ctx["premise"]["start"]["clock"])
+    cal = cal_of(ctx["premise"])
+    start = _when(ctx["premise"]["start"]["date"] + " " + ctx["premise"]["start"]["clock"], cal)
     if not any(q["role"] == "MAIN" for q in o["quests"]):
         out.append("at least one quest must be MAIN")
     for q in o["quests"]:
@@ -161,9 +180,9 @@ def check_story(o: dict, ctx: dict) -> list[str]:
         out += [f"pressure {p['id']}: actor {a!r} is not in the cast" for a in p["actors"] if slug(a) not in people]
         if not p["pace"].lower().startswith("every "):
             out.append(f"pressure {p['id']}: pace must read 'every <interval> while <condition>'")
-        w = _when(p["first_check"])
+        w = _when(p["first_check"], cal)
         if w is None or (start and w < start):
-            out.append(f"pressure {p['id']}: first_check must be 'YYYY-MM-DD HH:MM' on or after the start")
+            out.append(f"pressure {p['id']}: first_check must read like '{_example(cal, ctx['premise']['start']['date'])}', a real date on or after the start")
     for r in o["rights"]:
         out += [f"right {r['id']}: party {x!r} is not in the cast" for x in r["parties"] if slug(x) not in people]
     if ctx["premise"]["modules"]["bounded_scenario_endings"]["on"] and not o["endings"]["core"]:
@@ -291,6 +310,8 @@ def assemble(ctx: dict) -> str:
                         "environment": {"weather": s["weather"]}, "material_history": [], "unowned_facts": {"visible": [], "hidden": []}},
         "narrative_theme": {"initial": {"tone": pr["tone"], "style": pr["style"]}, "current": {"tone": pr["tone"], "style": pr["style"]}},
     }
+    if pr.get("calendar"):
+        tree["calendar"] = {k: v for k, v in pr["calendar"].items() if v not in (None, "", [])}
     if mods["bounded_scenario_endings"]:
         tree["ending_conditions"] = {"core_conditions": st["endings"]["core"], "hidden_conditions": st["endings"]["hidden"], "closed": []}
     if pr["source_game"]:
