@@ -1,6 +1,6 @@
 """Runs a turn exactly as engine/steps.yaml says. The AI fills a form; the program executes it."""
 from __future__ import annotations
-import json, pathlib, re
+import json, os, pathlib, re, sys, time
 import yaml
 
 from . import combat, mechanics as M, schema
@@ -106,6 +106,15 @@ def ask_ai(llm, step: dict, turn: Turn, extra: str = ""):
 
 def run_step(llm, step: dict, turn: Turn, extra: str = ""):
     """Ask; validate against the form; one retry that lists the faults."""
+    t0 = time.time()
+    try:
+        return _run_step(llm, step, turn, extra)
+    finally:
+        if os.environ.get("LGM_TRACE"):
+            print(f"  [{step['id']} {time.time() - t0:.0f}s]", file=sys.stderr, flush=True)
+
+
+def _run_step(llm, step: dict, turn: Turn, extra: str = ""):
     for _ in range(2):
         try:
             out = ask_ai(llm, step, turn, extra)

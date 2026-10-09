@@ -31,6 +31,8 @@ def main(argv=None):
         game = Game.open(a.saves, a.game)
     except FileNotFoundError:
         game = Game.new(a.saves, a.game, pathlib.Path(a.background).read_text(encoding="utf-8"))
+        flow.intake(game.world, ai)
+        game.save()
     lines = pathlib.Path(a.script).read_text(encoding="utf-8").splitlines() if a.script else None
     print(header(game.world))
     while True:
