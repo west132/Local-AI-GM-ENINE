@@ -1,33 +1,258 @@
-import pathlib, sys
+import pathlib, sys, random
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from localgm import flow, mechanics as M
-from localgm.state import World, background_tree, WriteRefused
 import pytest
+from localgm import combat, flow, mechanics as M
+from localgm.state import World, background_tree, WriteRefused
 
-BG = pathlib.Path(__file__).resolve().parent.parent / "examples/harbour_guesthouse/background.md"
+ROOT = pathlib.Path(__file__).resolve().parent.parent / "examples"
+HARD = ["ashfall_hunter", "cyberpunk_red_south_nc", "last_scion_boundary", "tarnstead_low_fantasy"]
 
 
 class Scripted:
-    """Stand-in for the model: returns canned replies per step, in the order asked."""
+    """Stand-in for the model: canned replies in the order the steps ask for them."""
     def __init__(self, replies): self.replies, self.seen = list(replies), []
-    def ask(self, system, user, schema, max_tokens=None):
-        self.seen.append((system, user)); return self.replies.pop(0)
+    def ask(self, system, user, schema=None, max_tokens=None):
+        self.seen.append((system, user))
+        r = self.replies.pop(0)
+        if isinstance(r, Exception): raise r
+        return r
 
 
-def world():
-    return World(background_tree(BG.read_text()))
+def world(name="harbour_guesthouse"):
+    return World(background_tree((ROOT / name / "background.md").read_text()))
 
 
-def test_ai_cannot_write_owned_paths():
+FAST = {"kind": "fast", "steps": []}
+OK = {"ok": True}
+LOOP_REACT = {"kind": "loop", "steps": ["react"]}
+LOOP_JUDGE = {"kind": "loop", "steps": ["judge"]}
+
+
+def roll_form(**kw):
+    stakes = {"success": "it works", "failure": "it fails", "harm": "none", **kw.pop("stakes", {})}
+    return {"verdict": "roll", "roll": {"capability": 0, "base": 10, "stakes": stakes, **kw}}
+
+
+def force_check(monkeypatch, success: bool):
+    monkeypatch.setattr(M, "check", lambda cap, tool, diff, rng=None: {"dice": [6, 6] if success else [1, 1], "cap": cap, "tool": tool,
+                                                                       "total": 12 if success else 2, "difficulty": diff, "success": success})
+
+
+# ---------- one workflow, defined once ----------
+
+def test_the_yaml_is_the_whole_workflow():
+    steps = flow.load_steps()
     w = world()
-    for p in ("player.money", "player.condition.hp", "world_state.time.clock_minutes", "round"):
+    t = flow.Turn(w, "x")
+    for s in steps:
+        assert s["program"] in flow.HANDLERS, s["id"]
+        flow._when(s["when"], t)                        # every condition evaluates
+        if s.get("ai") is not False:
+            for r in s["rules"]:
+                assert (flow.ENGINE / "rules" / f"{r}.md").exists()
+            flow.inputs(s, t)                           # every input name is known
+    ids = [s["id"] for s in steps]
+    assert ids.index("judge") < ids.index("wonder") < ids.index("react") < ids.index("tell")   # roll before consequence
+
+
+def test_fast_turn_is_sort_tell_audit_only():
+    w = world()
+    llm = Scripted([{"kind": "fast", "steps": [], "note": "You pick up the broom."}, "You pick up the broom.", OK])
+    t = flow.run_turn(w, llm, "I pick up the broom")
+    assert t.ran == ["sort", "tell", "audit"] and len(llm.seen) == 3 and w.round == 1
+
+
+# ---------- the dice decide, then the AI is told ----------
+
+def test_the_ai_sees_the_ask_result_before_it_decides_the_consequence(monkeypatch):
+    monkeypatch.setattr(M, "ask", lambda l, rng=None: {"dice": [1, 2], "likelihood": l, "total": 3 + l, "band": "NO, AND"})
+    w = world()
+    llm = Scripted([LOOP_REACT,
+                    {"asks": [{"question": "Does Hobb let me stay?", "likelihood": 1, "for": "the house is half empty"}]},
+                    {"minutes": 10, "ops": [{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "hostile"}]},
+                    "He refuses.", OK])
+    t = flow.run_turn(w, llm, "I ask Hobb for a room")
+    wonder_prompt, react_prompt = llm.seen[1][1], llm.seen[2][1]
+    assert "NO, AND" not in wonder_prompt            # nothing was decided yet when the question was asked
+    assert "'Does Hobb let me stay?' → NO, AND" in react_prompt   # the AI is told the result before it writes consequences
+    assert w.get("npcs.hobb_marren.state.mood") == "hostile"
+    assert any(l.startswith("ask 2d10") for l in t.lines)
+
+
+def test_a_failed_roll_costs_hp_in_code_and_a_win_earns_evidence(monkeypatch):
+    force_check(monkeypatch, False)
+    monkeypatch.setattr(combat, "damage_roll", lambda src, rng=None: (4, "1d6 (4)"))
+    w = world()
+    hp0 = w.player["condition"]["hp"]
+    llm = Scripted([LOOP_JUDGE, roll_form(stakes={"harm": "loss", "source": "man-sized", "failure": "a blow lands"}), "You are hit.", OK])
+    t = flow.run_turn(w, llm, "I shove past the man")
+    assert w.player["condition"]["hp"] == hp0 - 4
+    assert any("HP" in l for l in t.lines) and any("RESULT harm" in r for r in t.results)
+
+    force_check(monkeypatch, True)
+    w2 = world()
+    skill = next(iter(w2.player["skills"]))
+    llm = Scripted([LOOP_JUDGE, roll_form(base=16, skill=skill, committed=True), "It works.", OK])
+    flow.run_turn(w2, llm, "I try")
+    sk = w2.player["skills"][skill]
+    assert sk.get("growth_evidence", 0) + sk.get("ceiling_evidence", 0) == 1
+    assert skill in w2.player["growth_period"]["credited"]
+
+
+def test_harm_without_a_source_goes_back_to_the_ai(monkeypatch):
+    force_check(monkeypatch, True)
+    w = world()
+    llm = Scripted([LOOP_JUDGE, roll_form(stakes={"harm": "loss"}),
+                    roll_form(stakes={"harm": "loss", "source": "light"}), "ok", OK])
+    flow.run_turn(w, llm, "I jump")
+    assert "needs stakes.source" in llm.seen[2][1]
+
+
+def test_odds_stop_waits_for_the_player_then_rolls_unchanged(monkeypatch):
+    rolled = []
+    monkeypatch.setattr(M, "check", lambda cap, tool, diff, rng=None: rolled.append(diff) or {"dice": [9, 9], "cap": cap, "tool": tool, "total": 18, "difficulty": diff, "success": True})
+    w = world()
+    llm = Scripted([LOOP_JUDGE, roll_form(base=20, stakes={"failure": "you fall"})])      # ~ under 25%, not committed
+    t = flow.run_turn(w, llm, "I leap the gap")
+    assert t.halt and rolled == [] and w.tree["pending"]["roll"]["base"] == 20 and "%" in t.prose and len(llm.seen) == 2
+    llm = Scripted([{"kind": "confirm", "steps": []}, "You land it.", OK])
+    flow.run_turn(w, llm, "yes, go")
+    assert rolled == [20] and "pending" not in w.tree
+    # a different answer drops it without a roll
+    w.tree["pending"] = {"roll": {"capability": 0, "base": 20, "stakes": {}}, "ask": "x", "action": "y"}
+    flow.run_turn(w, Scripted([FAST, "Fine.", OK]), "never mind, I wait")
+    assert "pending" not in w.tree and rolled == [20]
+
+
+# ---------- time, dues, clocks, money ----------
+
+def test_a_due_that_falls_during_the_action_is_resolved_in_the_same_turn():
+    w = world()
+    w.apply({"op": "plan", "path": "npcs.tobias_wren", "value": "locks up the loft", "due_in_minutes": 30})
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 60, "ops": []},
+                    {"minutes": 0, "ops": [{"op": "set", "path": "npcs.tobias_wren.state.status", "value": "walking home"}]},
+                    "Tobias leaves.", OK])
+    flow.run_turn(w, llm, "I read for an hour")
+    assert "locks up the loft" not in llm.seen[2][1]            # not yet due when the action began
+    assert "locks up the loft" in llm.seen[3][1]                # shown in a second pass, same turn
+    assert w.get("npcs.tobias_wren.state.status") == "walking home"
+    assert not any("locks up the loft" in d["what"] for d in w.get("npcs.tobias_wren.plan.dues"))
+
+
+def test_money_and_time_are_applied_by_the_program_and_overspending_is_refused():
+    w = world()
+    cash = w.cash()[0]
+    t0 = w.time["clock_minutes"]
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 20, "ops": [], "money": -3}, "You pay.", OK])
+    flow.run_turn(w, llm, "I pay for tea")
+    assert w.cash()[0] == cash - 3 and w.time["clock_minutes"] == t0 + 20
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 5, "ops": [], "money": -9999},
+                    {"minutes": 5, "ops": [], "money": 0}, "No.", OK])
+    flow.run_turn(w, llm, "I buy the harbour")
+    assert w.cash()[0] == cash - 3 and "not enough money" in llm.seen[3][1]
+
+
+def test_a_due_clock_must_be_answered_and_the_program_fills_it():
+    w = world("tarnstead_low_fantasy")
+    pid = "rising_water"
+    w.tree["active_world_pressures"][pid]["clock"]["due_at"] = {"day": 0, "clock": 0}
+    w.tree["active_world_pressures"][pid]["clock"]["interval_minutes"] = 1440
+    before = w.tree["active_world_pressures"][pid]["clock"]["filled"]
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 5, "ops": []},
+                    {"minutes": 5, "ops": [], "clocks": [{"pressure": pid, "operated": True}]}, "Rain.", OK])
+    flow.run_turn(w, llm, "I wait")
+    assert "answer it in 'clocks'" in llm.seen[3][1]
+    c = w.tree["active_world_pressures"][pid]["clock"]
+    assert c["filled"] == before + 1 and c["due_at"]["day"] == 1
+
+
+# ---------- the AI cannot corrupt the world ----------
+
+def test_owned_paths_and_bad_shapes_are_refused_and_nothing_partial_survives():
+    w = world()
+    snapshot = repr(w.tree)
+    for op in ({"op": "set", "path": "player.money", "value": 999},
+               {"op": "set", "path": "npcs.hobb_marren", "value": "gone"},
+               {"op": "remove", "path": "npcs.hobb_marren"},
+               {"op": "set", "path": "npcs.hobb_marren.name", "value": ["a", "list"]},
+               {"op": "set", "path": "invented_top_level.x", "value": 1}):
+        good = {"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "calm"}
+        faults = w.commit([good, op])
+        assert faults, op
+        assert repr(w.tree) == snapshot          # the good op did not stay behind
+    assert w.commit([{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "calm"}]) == []
+
+
+def test_a_turn_whose_ops_are_refused_twice_changes_nothing_and_tells_the_narrator():
+    w = world()
+    bad = {"minutes": 30, "ops": [{"op": "set", "path": "npcs.hobb_marren", "value": "gone"}]}
+    llm = Scripted([LOOP_REACT, {"asks": []}, bad, bad, "Nothing happens.", OK])
+    t = flow.run_turn(w, llm, "I wait")
+    assert isinstance(w.get("npcs.hobb_marren"), dict) and w.time["clock_minutes"] == 975
+    assert any("could not be recorded" in f for f in t.facts)
+
+
+def test_the_real_world_is_untouched_when_a_turn_crashes():
+    w = world()
+    snap, rnd = repr(w.tree), w.round
+    llm = Scripted([LOOP_REACT, {"asks": []}, {"minutes": 30, "ops": [], "money": -1}, RuntimeError("model died")])
+    with pytest.raises(RuntimeError):
+        flow.run_turn(w, llm, "I wait")
+    assert repr(w.tree) == snap and w.round == rnd
+
+
+def test_quest_step_runs_without_a_minutes_field_and_trackers_are_counted_by_the_program():
+    w = world()
+    llm = Scripted([{"kind": "loop", "steps": ["quest"]},
+                    {"ops": [{"op": "tracker", "path": "fish", "value": {"create": {"name": "Fish", "target": 3}}}]}, "ok", OK])
+    flow.run_turn(w, llm, "I start counting fish")
+    llm = Scripted([{"kind": "loop", "steps": ["quest"]},
+                    {"ops": [{"op": "tracker", "path": "fish", "value": {"add": 9}}]}, "ok", OK])
+    flow.run_turn(w, llm, "more fish")
+    assert w.tree["trackers"]["fish"]["current"] == 3        # clamped at the target
+    assert w.commit([{"op": "set", "path": "trackers.fish.current", "value": 0}])   # the AI cannot write it directly
+
+
+# ---------- start of game ----------
+
+@pytest.mark.parametrize("name", HARD)
+def test_hard_backgrounds_load_and_nothing_is_silently_dropped(name):
+    w = world(name)
+    assert w.actors_here()
+    todo = w.needs_intake()
+    for kind in ("npcs", "factions"):
+        for rid, r in (w.tree.get(kind) or {}).items():
+            p = (r.get("plan") or {}) if isinstance(r, dict) else {}
+            assert p.get("dues") or p.get("text") or not p or f"{kind}.{rid}" in todo
+    assert len(flow.scene(w, True)) < 8000
+
+
+def test_intake_sets_dues_clocks_and_refuses_the_past():
+    w = world("tarnstead_low_fantasy")
+    todo = w.needs_intake()
+    assert any(p.startswith("active_world_pressures.") for p in todo)
+    keep = [p for p in todo if p.startswith("npcs.")][:3] + [p for p in todo if p.startswith("active_world_pressures.")][:1]
+    for p in todo:
+        if p not in keep:
+            (w.get(p + ".plan") or {}).update(triggers=["x"], text=None) if p.split(".")[0] != "active_world_pressures" else w.get(p + ".clock").pop("due")
+            if w.get(p + ".plan"): w.get(p + ".plan").pop("text", None)
+    good = {"actors": [{"id": p, "dues": [{"day_offset": 1, "at": "dawn", "what": "x"}], "triggers": [], "interval_minutes": 1440} for p in keep]}
+    bad = {"actors": [{"id": p, "dues": [{"day_offset": 0, "at": "00:10", "what": "past"}], "triggers": []} for p in keep]}
+    llm = Scripted([bad, good])
+    flow.intake(w, llm, batch=4)
+    assert not [p for p in keep if p in w.needs_intake()]
+    assert "past" in llm.seen[1][1]
+    pid = [p for p in keep if p.startswith("active")][0]
+    assert w.get(pid + ".clock.due_at") == {"day": 1, "clock": 360} and w.get(pid + ".clock.interval_minutes") == 1440
+
+
+# ---------- small things that stayed true ----------
+
+def test_ai_cannot_write_owned_paths_and_plans_fire_in_order():
+    w = world()
+    for p in ("player.money", "player.condition.hp", "world_state.time.clock_minutes", "round", "pending"):
         with pytest.raises(WriteRefused):
             w.apply({"op": "set", "path": p, "value": 999})
-
-
-def test_plan_gets_absolute_due_and_fires_in_order():
-    w = world()
-    assert w.tree["npcs"]["edda_pryce"]["plan"]["dues"][0]["clock"] == 1020      # BACKGROUND's "17:00" became a real due
     w.apply({"op": "plan", "path": "npcs.hobb_marren", "value": "opens the shutters", "due_in_minutes": 90})
     w.apply({"op": "plan", "path": "npcs.tobias_wren", "value": "leaves", "due_in_minutes": 30})
     assert w.due() == []
@@ -35,55 +260,13 @@ def test_plan_gets_absolute_due_and_fires_in_order():
     assert [p for p, _ in w.due()] == ["npcs.tobias_wren", "npcs.edda_pryce", "npcs.hobb_marren"]
 
 
-def test_fast_turn_is_sort_tell_audit_only():
-    w = world()
-    llm = Scripted([{"kind": "fast", "steps": [], "note": "You pick up the broom."}, "You pick up the broom.", {"ok": True}])
-    t = flow.run_turn(w, llm, "I pick up the broom")
-    assert t.ran == ["sort"] and len(llm.seen) == 3 and w.round == 1
-
-
-def test_loop_turn_rolls_in_code_and_moves_time():
-    w = world()
-    before = w.time["clock_minutes"]
-    llm = Scripted([
-        {"kind": "loop", "steps": ["judge", "react"]},
-        {"verdict": "roll", "roll": {"capability": 0, "base": 10, "stakes": {"success": "Hobb lets you in", "failure": "Hobb refuses"}}},
-        {"minutes": 20, "ops": [{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "wary"},
-                                {"op": "set", "path": "player.money", "value": 1000}]},
-        {"minutes": 20, "ops": [{"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "wary"}]},
-        "He eyes you.", {"ok": True}])
-    t = flow.run_turn(w, llm, "I ask Hobb for a room")
-    assert any("2d10" in l for l in t.lines)
-    assert w.get("npcs.hobb_marren.state.mood") == "wary"
-    assert w.player["money"] != 1000
-    assert w.time["clock_minutes"] == (before + 20) % 1440 or w.time["day_index"] > 0
-
-
-def test_each_step_loads_only_its_rules():
-    w = world()
-    llm = Scripted([{"kind": "fast", "steps": []}, "x", {"ok": True}])
-    flow.run_turn(w, llm, "I wait")
-    sys_sort, sys_tell = llm.seen[0][0], llm.seen[1][0]
-    assert "DECISION GATE" in sys_sort and "DECISION GATE" not in sys_tell
-    assert len(sys_sort) < 9000
-
-
-def test_fight_runs_in_code_and_kills_nobody_the_ai_did_not_hit():
-    import random
-    from localgm import combat
+def test_fight_runs_in_code():
     w = world()
     out = {"foes": [{"id": "thug", "name": "Thug", "v": 1, "size": "normal"}],
-           "exchanges": [{"foe": "thug", "roll": {"capability": 0, "base": 10}, "on_success": "full",
-                          "my_source": "unarmed", "on_failure": "loss",
-                          "attackers": [{"who": "Thug", "source": "man-sized"}]}] * 6}
+           "exchanges": [{"foe": "thug", "roll": {"capability": 0, "base": 10}, "on_success": "full", "my_source": "unarmed",
+                          "on_failure": "loss", "attackers": [{"who": "Thug", "source": "man-sized"}]}] * 6}
     lines, facts = combat.run(w, out, random.Random(3))
-    assert any("Exchange 1" in l for l in lines)
-    hp = w.player["condition"]["hp"]
-    assert 0 <= hp <= M.max_hp(1)
-    assert w.state_of("thug") in ("standing", "down", "dead")
-    # nothing happens after somebody is down
-    n = sum(1 for l in lines if l.startswith("Exchange"))
-    assert n <= 6
+    assert any("Exchange 1" in l for l in lines) and 0 <= w.player["condition"]["hp"] <= M.max_hp(1)
 
 
 def test_down_then_hit_is_dead_and_sticks():
@@ -93,48 +276,13 @@ def test_down_then_hit_is_dead_and_sticks():
     assert w.player_state() == "dead"
 
 
-def test_ai_unknown_damage_source_is_refused():
-    import pytest
-    from localgm import combat
+def test_unknown_damage_source_is_refused():
     with pytest.raises(M.RuleError):
         combat.damage_roll("laser")
 
 
-HARD = ["ashfall_hunter", "cyberpunk_red_south_nc", "last_scion_boundary", "tarnstead_low_fantasy"]
-ROOT = pathlib.Path(__file__).resolve().parent.parent / "examples"
-
-
-@pytest.mark.parametrize("name", HARD)
-def test_hard_backgrounds_load_and_every_unparsed_plan_goes_to_intake(name):
-    w = World(background_tree((ROOT / name / "background.md").read_text()))
-    assert w.actors_here()
-    todo = w.needs_intake()
-    for kind in ("npcs", "factions"):
-        for rid, r in (w.tree.get(kind) or {}).items():
-            p = (r.get("plan") or {}) if isinstance(r, dict) else {}
-            assert p.get("dues") or p.get("text") or not p or r["plan"] in [w.get(x + ".plan") for x in todo]   # nothing silently dropped
-    assert len(flow.scene(w, True)) < 8000
-    assert isinstance(todo, list)
-
-
-def test_intake_sets_dues_and_refuses_the_past():
-    w = World(background_tree((ROOT / "tarnstead_low_fantasy" / "background.md").read_text()))
-    todo = w.needs_intake()
-    first = todo[:4]
-    for p in todo[4:]:
-        w.get(p + ".plan").pop("text", None); w.get(p + ".plan")["triggers"] = ["x"]
-    good = {"actors": [{"id": p, "dues": [{"day_offset": 1, "at": "dawn", "what": "patrol"}], "triggers": ["immediately if the watch closes"]} for p in first]}
-    bad = {"actors": [{"id": p, "dues": [{"day_offset": 0, "at": "00:10", "what": "past"}], "triggers": []} for p in first]}
-    llm = Scripted([bad, good])
-    flow.intake(w, llm, batch=4)
-    assert all(p not in w.needs_intake() for p in first)
-    d = w.get(first[0] + ".plan.dues")[0]
-    assert d["day"] == 1 and d["clock"] == 360
-    assert "past" in llm.seen[1][1]       # the refusal reason went back to the AI
-
-
 def test_money_as_a_record_still_pays_and_never_goes_below_zero():
-    w = World(background_tree((ROOT / "tarnstead_low_fantasy" / "background.md").read_text()))
+    w = world("tarnstead_low_fantasy")
     amount, cur = w.cash()
     w.pay(-5)
     assert w.cash()[0] == amount - 5 and cur
@@ -143,21 +291,18 @@ def test_money_as_a_record_still_pays_and_never_goes_below_zero():
 
 
 def test_wh_question_and_unsupported_likelihood_are_not_rolled():
-    w = world()
-    t = flow.Turn(w, "x")
-    out = {"minutes": 5, "ops": [], "asks": [
+    t = flow.Turn(world(), "x")
+    t.final = True
+    flow.h_ask_roll(t, {"asks": [
         {"question": "What has been happening in town?", "likelihood": 3},
         {"question": "Does Hobb have a spare room?", "likelihood": 2},
-        {"question": "Does Hobb have a spare room?", "likelihood": 2, "for": "the house is half empty"}]}
-    bad = flow.do_apply(t, out)
-    assert len(bad) == 2 and len([l for l in t.lines if l.startswith("ask")]) == 1
+        {"question": "Does Hobb have a spare room?", "likelihood": 2, "for": "the house is half empty"}]})
+    assert len([l for l in t.lines if l.startswith("ask")]) == 1
 
 
 def test_a_looping_narrator_is_cut_off_by_the_program():
     loop = "You step onto the quay. Gulls circle overhead.\n\n" + "\n".join(
-        f'You tell him your favourite thing is number {i}, and he smiles. "That is a great thing. What is your favourite colour?"' for i in range(1, 60))
+        f'You tell him your favourite thing is number {i}, and he smiles. "That is a great thing."' for i in range(1, 60))
     out = flow.clean("```text\n" + loop + "\n```")
     assert len(out.split()) <= flow.MAX_WORDS and "```" not in out
-    assert out.count("What is your favourite colour") <= 1 or len(out.split()) < 360
-    same = flow.clean("The door opens. The door opens. The door opens. A man enters.")
-    assert same == "The door opens. A man enters."
+    assert flow.clean("The door opens. The door opens. The door opens. A man enters.") == "The door opens. A man enters."

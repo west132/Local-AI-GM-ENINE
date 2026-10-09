@@ -13,12 +13,20 @@ from . import clock, mechanics as M
 # AI may not write under these prefixes (program-owned)
 OWNED = (r"round", r"world_state\.time", r"player\.condition\.(hp|mp)", r"player\.money",
          r"player\.resources", r"player\.progression", r"player\.skills\.[^.]+\.(class|tier|growth_evidence|ceiling_evidence)",
-         r"trackers", r"journal")
+         r"trackers", r"journal", r"pending")
 _OWNED = [re.compile(p + r"(\.|$)") for p in OWNED]
 
 
 class WriteRefused(ValueError):
     pass
+
+
+def _same_shape(old, new) -> bool:
+    if isinstance(old, bool) or isinstance(new, bool):
+        return isinstance(old, bool) and isinstance(new, bool)
+    if isinstance(old, (int, float)) and isinstance(new, (int, float)):
+        return True
+    return type(old) is type(new)
 
 
 def background_tree(text: str) -> dict:
@@ -106,13 +114,79 @@ class World:
     def player(self) -> dict:
         return self.tree["player"]
 
-    # ----- AI-proposed ops -----
+    # ----- AI-proposed ops: all or nothing -----
+    def clone(self) -> "World":
+        return World(copy.deepcopy(self.tree), self.round)
+
+    def commit(self, ops: list[dict]) -> list[str]:
+        """Apply every op to a copy, check the result, and swap it in only if all of it is sound.
+        Returns the faults; on any fault nothing at all has changed."""
+        trial = self.clone()
+        faults = []
+        for i, op in enumerate(ops):
+            try:
+                trial._check(op)
+                trial.apply(op)
+            except (WriteRefused, KeyError, TypeError, ValueError, AttributeError) as e:
+                faults.append(f"op {i + 1} ({op.get('op')} {op.get('path')}): {e}")
+        faults += trial._broken_by(self)
+        if faults:
+            return faults
+        self.tree = trial.tree
+        return []
+
+    RECORDS = ("npcs", "factions", "locations", "quests", "active_world_pressures", "development_threads",
+               "rights_obligations")
+
+    def _check(self, op: dict) -> None:
+        """Structure checks on one op, against the state it is about to change."""
+        kind, path = op.get("op"), op.get("path", "")
+        if kind not in ("set", "append", "remove", "plan", "tracker"):
+            raise WriteRefused(f"unknown op {kind!r}")
+        if kind == "tracker":
+            return
+        if not path or path.startswith(".") or ".." in path:
+            raise WriteRefused("bad path")
+        keys = path.split(".")
+        if keys[0] not in self.tree:
+            raise WriteRefused(f"{keys[0]!r} is not part of this world's records")
+        if keys[0] in self.RECORDS:
+            if len(keys) == 2 and kind == "remove":
+                raise WriteRefused("a record is never deleted; change its status")
+            if len(keys) == 2 and kind == "set" and (keys[1] in self.tree[keys[0]] or not isinstance(op.get("value"), dict)):
+                raise WriteRefused("change a record's fields one at a time; a new record must be an object")
+            if len(keys) == 1:
+                raise WriteRefused("name the record")
+        if kind == "set":
+            old = self.get(path)
+            new = op.get("value")
+            if old is not None and not _same_shape(old, new):
+                raise WriteRefused(f"{path} holds {type(old).__name__}; the new value is {type(new).__name__}")
+        if kind == "plan" and not isinstance(self.get(path), dict):
+            raise WriteRefused(f"{path} is not a record that can plan")
+
+    def _broken_by(self, before: "World") -> list[str]:
+        """Invariants the whole world must still satisfy after the ops."""
+        out = []
+        for kind in self.RECORDS:
+            was, now = before.tree.get(kind) or {}, self.tree.get(kind) or {}
+            if not isinstance(now, dict) or any(rid not in now for rid in was):
+                out.append(f"{kind}: a record would disappear")
+            elif any(not isinstance(r, dict) for r in now.values()):
+                out.append(f"{kind}: every record must stay an object")
+        if before.player.get("identity") != self.player.get("identity"):
+            out.append("player.identity cannot change")
+        return out
+
     def apply(self, op: dict) -> None:
         path, kind = op["path"], op["op"]
         if any(p.match(path) for p in _OWNED):
             raise WriteRefused(f"{path} is kept by the program; state what happened and it is applied")
         if kind == "plan":
             self._plan(op)
+            return
+        if kind == "tracker":
+            self._tracker(op)
             return
         d, k = _walk(self.tree, path, create=(kind == "set"))
         if kind == "set":
@@ -128,6 +202,24 @@ class World:
             del d[k]
         else:
             raise WriteRefused(f"unknown op {kind!r}")
+
+    def _tracker(self, op: dict) -> None:
+        """Trackers own a countable fact {name, current, target}. The AI says what happened; the program counts."""
+        v = op.get("value") or {}
+        trackers = self.tree.setdefault("trackers", {})
+        tid = op["path"]
+        if "create" in v:
+            c = v["create"]
+            if tid in trackers:
+                raise WriteRefused(f"tracker {tid} exists")
+            trackers[tid] = {"name": str(c["name"]), "current": int(c.get("current", 0)), "target": int(c["target"])}
+        elif "add" in v:
+            if tid not in trackers:
+                raise WriteRefused(f"no tracker {tid}")
+            t = trackers[tid]
+            t["current"] = M.clamp(t["current"] + int(v["add"]), 0, t["target"])
+        else:
+            raise WriteRefused("tracker value is {create:{name,target}} or {add:n}")
 
     def _plan(self, op: dict) -> None:
         """Store an actor's next move with an absolute due, so the program can fire it."""
@@ -152,17 +244,55 @@ class World:
                 for d in ((rec.get("plan") or {}).get("dues") or []) if isinstance(rec, dict) else []:
                     if (d["day"], d["clock"]) <= now:
                         out.append(((d["day"], d["clock"]), f"{kind}.{rid}", d))
+        for pid, pr in (self.tree.get("active_world_pressures") or {}).items():
+            c = pr.get("clock") if isinstance(pr, dict) else None
+            at = c.get("due_at") if isinstance(c, dict) else None
+            if at and (at["day"], at["clock"]) <= now and c.get("filled", 0) < c.get("segments", 0):
+                out.append(((at["day"], at["clock"]), f"active_world_pressures.{pid}",
+                            {**at, "is_clock": True, "what": f"clock '{c.get('name', pid)}' ({c.get('filled', 0)}/{c.get('segments')}) is due its check; "
+                             f"pace: {c.get('pace', '')}"}))
         return [(path, d) for _, path, d in sorted(out, key=lambda x: x[0])]
 
     def clear_due(self, path: str, entry: dict) -> None:
+        """A due the AI has been shown is spent. A clock is not removed: it is moved on by tick_clock."""
         plan = self.get(path + ".plan")
         if plan and entry in plan["dues"]:
             plan["dues"].remove(entry)
 
+    def tick_clock(self, path: str, operated: bool, extra: bool = False) -> dict:
+        """The AI judged whether the process operated; the program fills the segments and sets the next check."""
+        c = self.get(path + ".clock")
+        if not isinstance(c, dict) or not c.get("due_at"):
+            raise WriteRefused(f"{path} has no clock to check")
+        gain = (1 + (1 if extra else 0)) if operated else 0
+        c["filled"] = min(int(c["segments"]), int(c.get("filled", 0)) + gain)
+        step = c.get("interval_minutes")
+        if step and c["filled"] < c["segments"]:
+            total = c["due_at"]["clock"] + int(step)
+            c["due_at"] = {"day": c["due_at"]["day"] + total // 1440, "clock": total % 1440}
+        else:
+            c.pop("due_at", None)            # full, or no regular pace: the AI sets the next check when it matters
+        return {"filled": c["filled"], "segments": c["segments"], "full": c["filled"] >= c["segments"],
+                "on_fill": c.get("on_fill", "")}
+
+    def set_clock(self, path: str, due: dict, interval_minutes: int | None) -> None:
+        c = self.get(path + ".clock")
+        clock_ = at_minutes(due["at"])
+        day = self.time["day_index"] + int(due["day_offset"])
+        if (day, clock_) < (self.time["day_index"], self.time["clock_minutes"]):
+            raise ValueError(f"{path}: the first check is in the past")
+        c["due_at"] = {"day": day, "clock": clock_}
+        if interval_minutes:
+            c["interval_minutes"] = int(interval_minutes)
+
     def needs_intake(self) -> list[str]:
-        return [f"{k}.{rid}" for k in ("npcs", "factions") for rid, r in (self.tree.get(k) or {}).items()
-                if isinstance(r, dict) and r.get("plan")
-                and (r["plan"].get("text") or not (r["plan"].get("dues") or r["plan"].get("triggers")))]
+        out = [f"{k}.{rid}" for k in ("npcs", "factions") for rid, r in (self.tree.get(k) or {}).items()
+               if isinstance(r, dict) and r.get("plan")
+               and (r["plan"].get("text") or not (r["plan"].get("dues") or r["plan"].get("triggers")))]
+        out += [f"active_world_pressures.{pid}" for pid, r in (self.tree.get("active_world_pressures") or {}).items()
+                if isinstance(r, dict) and isinstance(r.get("clock"), dict) and r["clock"].get("due")
+                and not r["clock"].get("due_at") and r["clock"].get("filled", 0) < r["clock"].get("segments", 0)]
+        return out
 
     def set_dues(self, path: str, dues: list[dict], triggers: list[str]) -> None:
         plan = self.get(path + ".plan")

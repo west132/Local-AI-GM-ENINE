@@ -1,8 +1,13 @@
-# The turn, in the format the program executes.
-# Each step: the program decides WHETHER it runs (`when`), builds the AI's INPUT, loads only the
-# listed RULES, validates the AI's OUTPUT against `output`, and then EXECUTES it (`program`).
-# The AI never rolls, adds, keeps time or writes a save; it only fills `output`.
-# Rule files live in engine/rules/ (own numbering, see docs/MAP_FROM_V5.md).
+# THE TURN, in the form the program runs. This file is the only definition of the workflow:
+# the runner (localgm/flow.py) walks `turn` in order and does nothing this file does not say.
+#   when     evaluated by the program (names: sort, turn); `always` or a Python expression
+#   ai       false = the program does this step alone
+#   rules    judgement rule files loaded for this step (engine/rules/)
+#   input    what the program shows the AI (see flow.inputs)
+#   output   the form the AI must fill in; anything else is refused
+#   program  the named handler that validates and commits the reply (flow.HANDLERS)
+# The AI never rolls, adds, keeps time or writes a save. It decides, and the program rolls and records.
+# Order matters: a roll or ask is resolved by the program BEFORE the AI is asked what follows from it.
 
 # Run once when a game starts (flow.intake), not every turn.
 intake:
@@ -30,22 +35,28 @@ intake:
                   at: {type: string}
                   what: {type: string}
             triggers: {type: array, items: {type: string}}
+            interval_minutes: {type: integer, minimum: 1, description: "pressures only: how often the clock is checked"}
   program: set_dues
 
 turn:
   - id: sort
     when: always
     rules: [01_jobs, 03_invariants, 05_player_side, 06_sorting]
-    input: [player_text, place, active_quests]
+    input: [player_text, place, active_quests, pending]
     output:
       type: object
       required: [kind, steps]
       properties:
-        kind:  {type: string, enum: [fast, loop, retrieval, continuation]}
+        kind:  {type: string, enum: [fast, loop, retrieval, continuation, confirm]}
         steps: {type: array, items: {type: string, enum: [judge, fight, react, quest]},
-                description: "only the parts whose trigger fired; empty for fast and retrieval"}
+                description: "only the parts whose trigger fired; empty for fast, retrieval and confirm"}
         note:  {type: string, description: "fast: what simply happens; retrieval: the answer from the records"}
-    program: route          # kind fast/retrieval -> straight to tell; else run the listed steps
+    program: route
+
+  - id: confirmed
+    when: "sort.kind == 'confirm' and turn.pending"
+    ai: false
+    program: roll_pending
 
   - id: judge
     when: "'judge' in sort.steps"
@@ -65,6 +76,10 @@ turn:
             base:       {type: integer, minimum: 1, maximum: 20}
             conditions: {type: object, description: "environment|time|sensory|position|simultaneous: -1,0,1,2"}
             tool:       {type: object, properties: {fit: {type: integer}, condition: {type: integer}}}
+            skill:      {type: string, description: "id of the player's skill used, if any"}
+            challenge:  {type: integer, minimum: 1, description: "numeric Challenge of the task, if it has one"}
+            scope:      {type: string, enum: [routine, minor, meaningful, major, exceptional], description: "how much the task matters, for experience"}
+            committed:  {type: boolean, description: "true if a standing order, plan or fighting style already commits the player to this risk"}
             stakes:
               type: object
               required: [success, failure]
@@ -72,13 +87,15 @@ turn:
                 success: {type: string}
                 failure: {type: string}
                 harm:    {type: string, enum: [none, setback, loss, severe]}
+                source:  {type: string, description: "when harm is loss or severe: what hurts (unarmed|light|one-handed|two-handed|bow|small|man-sized|large|huge|hazard-light|hazard-serious|hazard-grave|T1|T2|T3|T4)"}
+                soak:    {type: integer, minimum: 0, maximum: 2}
         decision: {type: object, description: "set only when the decision gate fires", properties: {question: {type: string}, options: {type: array}}}
-    program: roll           # validate -> odds -> (odds stop?) -> check() -> result record; XP/evidence if success
+    program: roll
 
   - id: fight
     when: "'fight' in sort.steps"
     rules: [10_fights]
-    input: [player_text, player_state, records_in_play, plan, morale_norms]
+    input: [player_text, player_state, records_in_play]
     output:
       type: object
       required: [exchanges]
@@ -105,43 +122,67 @@ turn:
               foe:        {type: string, description: "id of the engaged opponent"}
               roll:       {type: object, required: [capability, base], properties: {capability: {type: integer, enum: [-4, -2, 0, 2, 4]}, base: {type: integer, minimum: 1, maximum: 20}, conditions: {type: object}, tool: {type: object}}}
               on_success: {type: string, enum: [partial, full, decisive]}
-              my_source:  {type: string, description: "damage source of the player's blow: unarmed|light|one-handed|two-handed|bow|small|man-sized|large|huge"}
+              my_source:  {type: string, description: "damage source of the player's blow"}
               on_failure: {type: string, enum: [setback, loss, severe]}
               attackers:  {type: array, description: "who can hit the player on a failure", items: {type: object, required: [who, source], properties: {who: {type: string}, source: {type: string}}}}
               soak:       {type: integer, minimum: 0, maximum: 2}
         stop: {type: string, description: "why the orders no longer cover the next exchange, if so"}
-    program: combat         # rolls each exchange, damage, soak, HP, down/dead, lasting injury
+    program: combat
 
-  - id: react
+  # A: the AI says what is uncertain. Nothing is committed. B: the program rolls it.
+  - id: wonder
     when: "'react' in sort.steps"
-    rules: [11_actors, 12_world]
-    input: [place, time, actors_present, dues_fired, pressures, player_text, results_so_far]
+    rules: [11_actors]
+    input: [place, actors_present, dues_fired, player_text, results_so_far]
     output:
       type: object
-      required: [minutes, ops]
+      required: [asks]
       properties:
-        minutes: {type: integer, minimum: 0, description: "believable duration of what happened"}
         asks:
           type: array
           items:
             type: object
             required: [question, likelihood]
             properties:
-              question:   {type: string}
+              question:   {type: string, description: "yes/no, ending in ?"}
               likelihood: {type: integer, minimum: -3, maximum: 3}
               for:        {type: string}
               against:    {type: string}
+    program: ask_roll
+
+  # C: the AI is told the results and says what follows from them. D: the program validates and commits, all or nothing.
+  - id: react
+    when: "'react' in sort.steps"
+    rules: [11_actors, 12_world]
+    input: [place, actors_present, dues_fired, pressures, player_text, results_so_far]
+    output:
+      type: object
+      required: [minutes, ops]
+      properties:
+        minutes: {type: integer, minimum: 0, description: "believable duration of what happened"}
         ops:
           type: array
+          description: "record changes consistent with every RESULT shown to you"
           items:
             type: object
             required: [op, path]
             properties:
-              op:    {type: string, enum: [set, append, remove, plan]}
+              op:    {type: string, enum: [set, append, remove, plan, tracker]}
               path:  {type: string}
               value: {}
               due_in_minutes: {type: integer, minimum: 0}
-    program: apply          # rolls asks, advances the clock, fires dues, applies ops through the write rules
+        money:  {type: integer, description: "the player's cash change: negative = spent, positive = received"}
+        clocks:
+          type: array
+          description: "one entry for each CLOCK shown as due"
+          items:
+            type: object
+            required: [pressure, operated]
+            properties:
+              pressure: {type: string}
+              operated: {type: boolean, description: "the process actually operated since the last check"}
+              extra:    {type: boolean, description: "a plainly accelerating event, one extra segment"}
+    program: commit
 
   - id: quest
     when: "'quest' in sort.steps"
@@ -151,19 +192,27 @@ turn:
       type: object
       required: [ops]
       properties:
-        ops: {type: array}
-    program: apply
+        ops:
+          type: array
+          items:
+            type: object
+            required: [op, path]
+            properties:
+              op:    {type: string, enum: [set, append, remove, tracker]}
+              path:  {type: string}
+              value: {}
+    program: commit_ops
 
   - id: tell
-    when: always
+    when: "not turn.halt"
     rules: [15_telling_it]
     input: [place, facts_from_program, player_text]
     max_tokens: 500
     output: {type: string}
-    program: show           # header, roll lines, cash line are printed by the program around this text
+    program: show
 
   - id: audit
-    when: always
+    when: "not turn.halt"
     rules: [03_invariants, 15_telling_it]
     input: [place, prose, facts_from_program]
     output:
@@ -172,4 +221,4 @@ turn:
       properties:
         ok:       {type: boolean}
         problems: {type: array, items: {type: string}}
-    program: audit          # not ok -> tell once more with the problems listed; then show
+    program: audit

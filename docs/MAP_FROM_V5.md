@@ -73,5 +73,8 @@ Measured on 120 real rounds of a played save: about 90% of all record changes we
 
 ## D. Not yet checked
 
+See `docs/STATUS.md` for the per-rule status; this map only says where a rule went, not that it is finished.
+
+
 - The local engine text has not been run against any model yet.
 - The CODE list above is a plan. Each item has to be built and tested before it is true.
