@@ -74,7 +74,7 @@ turn:
 
   - id: judge
     when: "'judge' in sort.steps"
-    rules: [02_directive, 04_truth, 07_possible, 08_roll_setup, 09_stakes]
+    rules: [01_jobs, 02_directive, 04_truth, 07_possible, 08_roll_setup, 09_stakes]
     input: [player_text, place, player_state, records_in_play, results_so_far, resolved_facts]
     output:
       type: object
@@ -158,7 +158,7 @@ turn:
   # A: the AI says what is uncertain. Nothing is committed. B: the program rolls it.
   - id: wonder
     when: "'react' in sort.steps"
-    rules: [02_directive, 11_actors, 19_play_lessons]
+    rules: [01_jobs, 02_directive, 11_actors, 19_play_lessons]
     input: [place, actors_present, player_brief, records_in_play, dues_fired, player_text, results_so_far, resolved_facts]
     output:
       type: object
@@ -172,7 +172,7 @@ turn:
   # C: the AI is told the results and says what follows from them. D: the program validates and commits, all or nothing.
   - id: react
     when: "'react' in sort.steps"
-    rules: [02_directive, 11_actors, 12_world, 19_play_lessons]
+    rules: [01_jobs, 02_directive, 11_actors, 12_world, 19_play_lessons]
     input: [place, actors_present, player_brief, records_in_play, dues_fired, pressures, player_text, results_so_far, resolved_facts]
     output:
       type: object
