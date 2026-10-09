@@ -113,25 +113,35 @@ def _day_of(t: dict, y: int, mo: int, d: int) -> int | None:
         return None
 
 
+_DATE_TOKEN = re.compile(r"(\d{4})-(\d{2})-(\d{2})(?:[ T]+(\d{1,2}:\d{2}|dawn|morning|noon|midday|afternoon|dusk|evening|night|midnight)\b)?", re.I)
+
+
+def _tidy(text: str) -> str:
+    text = re.sub(r"\s+([,.;:])", r"\1", re.sub(r"\s+", " ", text)).strip(" ,;:-")
+    return re.sub(r"^(?:,|;)\s*", "", text)
+
+
 def parse_note(note: str, t: dict, move: str = ""):
-    """A plan note is clauses split by ';'. A clause that starts with 'YYYY-MM-DD HH:MM' (or dawn/noon/…) is a due on the clock;
-    a clause with no date is a trigger (a condition, no clock). A date anywhere else in a clause is ambiguous: return None and
-    let the AI read the whole note (its dates are then checked against this text, see dates_in)."""
+    """A plan note is clauses split by ';'. The calendar is the program's one calendar, written 'YYYY-MM-DD [HH:MM | dawn | noon …]'.
+    A clause with such a date is a due on the clock (no time given: morning); the words around the date are what happens.
+    A clause with no date and no clock time is a trigger (a condition). Any other kind of calendar or clock time: return None
+    and the one-time intake step reads the note, its dates then checked against this text (dates_in)."""
     dues, trig = [], []
     for clause in [c.strip() for c in str(note).split(";") if c.strip()]:
-        m = _LEAD.match(clause)
-        if m:
-            day = _day_of(t, int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            try:
-                at = at_minutes(m.group(4))
-            except ValueError:
-                return None
-            if day is None:
-                return None
-            dues.append({"day": day, "clock": at, "what": m.group(5).strip() or move})
-        elif _ANY_DATE.search(clause) or re.search(r"\d{1,2}:\d{2}", clause) or \
-                (re.search(r"\d", clause) and re.search(r"\b(dawn|morning|noon|midday|afternoon|dusk|evening|night|midnight)\b", clause, re.I)):
-            return None          # some kind of calendar time that is not 'YYYY-MM-DD HH:MM': the intake step reads the whole note
+        found = list(_DATE_TOKEN.finditer(clause))
+        if found:
+            what = _tidy(_DATE_TOKEN.sub("", clause)) or move
+            for m in found:
+                day = _day_of(t, int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                try:
+                    at = at_minutes(m.group(4) or "morning")
+                except ValueError:
+                    return None
+                if day is None:
+                    return None
+                dues.append({"day": day, "clock": at, "what": what})
+        elif re.search(r"\d{1,2}:\d{2}", clause):
+            return None          # a clock time with no date in the program's calendar
         else:
             trig.append(clause)
     return dues, trig
@@ -147,8 +157,8 @@ def dates_in(note: str, t: dict) -> list[tuple[int, int | None]]:
     return out
 
 
-_EVERY = re.compile(r"every\s+(\d+|a|one|two|three)?\s*(night|day|week|month|hour)s?", re.I)
-_NUM = {"a": 1, "one": 1, "two": 2, "three": 3}
+_EVERY = re.compile(r"\b(?:every|each)\s+(?:(\d+|a|one|two|three|second|third|other)\s+)?(?:(?:full|elapsed|in-world|in-game|whole)\s+)*(night|day|week|month|hour)s?\b", re.I)
+_NUM = {"a": 1, "one": 1, "two": 2, "second": 2, "other": 2, "three": 3, "third": 3}
 
 
 def clock_interval(pace: str) -> int | None:

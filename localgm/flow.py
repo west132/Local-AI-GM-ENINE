@@ -208,7 +208,7 @@ def run_step(llm, step: dict, turn: Turn, extra: str = ""):
 
 
 def _run_step(llm, step: dict, turn: Turn, extra: str = ""):
-    sch, errs = step["output"], []
+    sch, errs = schema.cap_arrays(step["output"]), []
     system = rules_text(step["rules"])
     if sch.get("type") != "string":
         system += "\n\nREPLY with one JSON object only:\n" + schema.render(sch)
@@ -251,6 +251,7 @@ def h_route(turn: Turn, out: dict):
     # Someone else is affected (section 6) whenever the player names a person who is here: that is never a fast action.
     if addressed(turn.world, turn.text) and out["kind"] in ("fast", "retrieval", "continuation") and "react" not in out["steps"]:
         out = {**out, "kind": "loop", "steps": out["steps"] + ["react"]}
+    out = {**out, "steps": list(dict.fromkeys(out.get("steps", [])))}      # a step named twice runs once
     turn.sort = out
     if turn.pending and out["kind"] != "confirm":
         turn.world.tree.pop("pending", None)          # the player changed their mind: dropped at no cost

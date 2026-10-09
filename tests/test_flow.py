@@ -233,22 +233,26 @@ def test_hard_backgrounds_load_and_nothing_is_silently_dropped(name):
 
 
 def test_intake_sets_dues_clocks_and_refuses_the_past():
+    # the cases the program cannot read: an actor with no plan at all, a note in some other calendar, a pace in words
     w = world("tarnstead_low_fantasy")
-    todo = w.needs_intake()
-    assert any(p.startswith("active_world_pressures.") for p in todo)
-    keep = [p for p in todo if p.startswith("npcs.")][:3] + [p for p in todo if p.startswith("active_world_pressures.")][:1]
-    for p in todo:
-        if p not in keep:
-            (w.get(p + ".plan") or {}).update(triggers=["x"], text=None) if p.split(".")[0] != "active_world_pressures" else w.get(p + ".clock").pop("due")
-            if w.get(p + ".plan"): w.get(p + ".plan").pop("text", None)
+    names = [i for i, r in w.tree["npcs"].items() if r.get("plan")][:3]
+    w.get(f"npcs.{names[0]}.plan").update(dues=[], triggers=[], text="Day 3 at 14:00 the market closes")
+    w.get(f"npcs.{names[1]}.plan").update(dues=[], triggers=[], text=None)
+    w.get(f"npcs.{names[2]}.plan").update(dues=[], triggers=[], text=None)
+    pid = next(iter(w.tree["active_world_pressures"]))
+    w.tree["active_world_pressures"][pid]["clock"].update(pace="whenever the tide turns", due="0318-01-07 16:45")
+    w.tree["active_world_pressures"][pid]["clock"].pop("due_at", None)
+    keep = [f"npcs.{n}" for n in names] + [f"active_world_pressures.{pid}"]
+    assert set(keep) <= set(w.needs_intake())
+    for p in set(w.needs_intake()) - set(keep):
+        (w.get(p + ".plan") or {}).update(triggers=["x"], text=None) if p.split(".")[0] != "active_world_pressures" else w.get(p + ".clock").pop("due")
     good = {"actors": [{"id": p, "dues": [{"day_offset": 1, "at": "dawn", "what": "x"}], "triggers": [], "interval_minutes": 1440} for p in keep]}
     bad = {"actors": [{"id": p, "dues": [{"day_offset": 0, "at": "00:10", "what": "past"}], "triggers": []} for p in keep]}
     llm = Scripted([bad, good])
     flow.intake(w, llm, batch=4)
     assert not [p for p in keep if p in w.needs_intake()]
     assert "past" in llm.seen[1][1]
-    pid = [p for p in keep if p.startswith("active")][0]
-    assert w.get(pid + ".clock.due_at") == {"day": 1, "clock": 360} and w.get(pid + ".clock.interval_minutes") == 1440
+    assert w.get(f"active_world_pressures.{pid}.clock.due_at") == {"day": 1, "clock": 360} and w.get(f"active_world_pressures.{pid}.clock.interval_minutes") == 1440
 
 
 # ---------- small things that stayed true ----------
@@ -364,18 +368,28 @@ def test_the_program_reads_dated_notes_itself():
     dues, trig = parse_note("2026-10-07 00:30 on Rusk's freight run; immediately if discovered", t, "m")
     assert dues == [{"day": 1, "clock": 30, "what": "on Rusk's freight run"}] and trig == ["immediately if discovered"]
     assert parse_note("2026-10-07 dawn to reconsider", t)[0][0]["clock"] == 360
-    assert parse_note("at the first reply; if unanswered, 2026-10-06 20:30 she leaves", t) is None       # a date inside a sentence: the AI reads it
-    assert parse_note("Year 482, Harvestwane 19 12:00 messenger due back", t) is None                    # another calendar: the AI reads it
+    dues, trig = parse_note("at the first reply on Oct 6 evening; if unanswered, 2026-10-06 20:30 she leaves", t)
+    assert dues == [{"day": 0, "clock": 1230, "what": "if unanswered, she leaves"}] and trig == ["at the first reply on Oct 6 evening"]
+    dues, _ = parse_note("next assessment 2026-10-20, or sooner on a valid resonance", t)
+    assert dues == [{"day": 14, "clock": 540, "what": "next assessment, or sooner on a valid resonance"}]      # no time written: morning
+    assert parse_note("Day 12 at 12:00 messenger due back", t) is None                                         # not the program's calendar
+
+
+def test_no_example_world_needs_the_ai_to_read_a_date():
+    for name in ("ashfall_hunter", "tarnstead_low_fantasy", "last_scion_boundary", "cyberpunk_red_south_nc", "harbour_guesthouse"):
+        w = world(name)
+        todo = w.needs_intake()
+        assert all(w.get(p + ".plan") and not w.get(p + ".plan.text") for p in todo), (name, todo)     # only actors with no plan at all remain
 
 
 def test_the_ai_cannot_move_a_date_the_note_gives():
-    w = world("ashfall_hunter")
-    path = "npcs.nadia_voss"
-    assert w.get(path + ".plan.text")                       # her note has a date inside a sentence, so the AI reads it
-    wrong = {"id": path, "dues": [{"day_offset": 1, "at": "20:30", "what": "x"}], "triggers": []}
+    w = world("harbour_guesthouse")
+    path = "npcs.hobb_marren"
+    w.get(path + ".plan")["text"] = "Day-end ledger; 2026-10-05 19:30 closes the desk"
+    wrong = {"id": path, "dues": [{"day_offset": 1, "at": "19:30", "what": "x"}], "triggers": []}
     with pytest.raises(ValueError, match="no due of yours is on it"):
         flow._check_dates(w, wrong)
-    flow._check_dates(w, {"id": path, "dues": [{"day_offset": 0, "at": "20:30", "what": "x"}], "triggers": []})
+    flow._check_dates(w, {"id": path, "dues": [{"day_offset": 0, "at": "19:30", "what": "x"}], "triggers": []})
 
 
 def test_a_pressure_with_a_dated_first_check_and_a_pace_is_set_by_the_program():
@@ -391,3 +405,18 @@ def test_the_telling_is_told_who_the_player_character_is():
         step = next(s for s in flow.load_steps() if s["id"] == sid)
         text = flow.inputs(step, t)
         assert "THE PLAYER CHARACTER" in text and "Rin Hale" in text, sid
+
+
+def test_a_reply_cut_off_by_the_token_limit_is_closed_and_checked():
+    from localgm.backend import parse_json
+    cut = '{"kind": "loop", "steps": ["react", "quest"], "note": "Nadia is affected: she came to hire Ri'
+    out = parse_json(cut)
+    assert out["kind"] == "loop" and out["steps"] == ["react", "quest"] and out["note"].startswith("Nadia")
+    assert parse_json('{"a": [1, 2, {"b": "x"}, "tr')["a"][:2] == [1, 2]
+
+
+def test_arrays_in_a_form_have_a_length_limit():
+    from localgm import schema
+    sch = flow.load_steps()[0]["output"]
+    capped = schema.cap_arrays(sch)
+    assert capped["properties"]["steps"]["maxItems"] == 6 and "maxItems" not in sch["properties"]["steps"]

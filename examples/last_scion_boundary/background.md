@@ -245,7 +245,7 @@ npcs:
       position: greywatch_hold
       status: Manages ration books and sends for wagon news; injured knee makes sustained travel difficult.
       plan: Seek a verified signatory for the Merewyn compact and stretch the stores without concealing the shortage from Joram.
-      due: Year 482, Harvestwane 18 18:00 ration review, then each evening the siege continues; Year 482, Harvestwane 19 12:00 Merewyn messenger due back
+      due: 0482-01-18 18:00 ration review, then each evening the siege continues; 0482-01-19 12:00 Merewyn messenger due back
     drives: {wants: [keep household solvent, preserve Julian and staff, prevent panic], fears: [starvation, forged accounts, needless noble quarrels], values: [duty, honest ledgers, Edric's promises]}
     relationships:
       julian_ardent: {tie: lifelong seneschal, attitude: dutiful and worried about young command, credit: [], grievance: [], believes_identity: last legal Ardent heir}
@@ -265,7 +265,7 @@ npcs:
       position: outer_gate
       status: Commands the available garrison formations and watches Sola's advance.
       plan: Hold the narrow approach if viable; shift to the inner gate if a sustainable defense fails. Send runner reports to Julian and Orlo.
-      due: Year 482, Harvestwane 18 07:00 first runner report to Julian; immediately on Sola's first committed attack or a confirmed flank move
+      due: 0482-01-18 07:00 first runner report to Julian; immediately on Sola's first committed attack or a confirmed flank move
     drives: {wants: [keep retainers alive, deny Vane easy entry, secure food], fears: [gate encirclement, false reports, unsustainable orders], values: [unit discipline, practical courage]}
     relationships:
       julian_ardent: {tie: commander under charter, attitude: loyal but blunt, credit: [], grievance: [], believes_identity: intelligent novice under strain}
@@ -285,7 +285,7 @@ npcs:
       position: merewyn_hall
       status: Age 18; mourning Aldren, holding letters from his last days; not yet sole charter signatory.
       plan: Demand a real inquiry into her father's murder while protecting granaries and tenants. If Julian asks for aid, negotiate feasible supplies and reciprocal obligations rather than let a quarrel endanger households.
-      due: Year 482, Harvestwane 19 10:00 Merewyn council sitting after the burial; immediately on a credible appeal from Julian
+      due: 0482-01-19 10:00 Merewyn council sitting after the burial; immediately on a credible appeal from Julian
     drives: {wants: [identify Aldren's killer, protect Merewyn's independence, preserve worthwhile alliances], fears: [council factionalism, being used as leverage, needless deaths], values: [dignity, sound agreements, honest affection]}
     relationships:
       julian_ardent: {tie: betrothed since childhood, attitude: familiar, concerned and irritated by his defensive pride, credit: [Edric's family honoured supply agreements until decline], grievance: [Julian has recently avoided asking for help directly], believes_identity: a frightened heir pretending otherwise}
@@ -305,7 +305,7 @@ npcs:
       position: merewyn_hall
       status: Holds interim convoy seals while succession and murder inquiry continue.
       plan: Protect grain reserves; ask for lawful escort and surety before authorizing dangerous convoys. Review evidence against Vane if it reaches him.
-      due: Year 482, Harvestwane 19 10:00 succession council; immediately when substantiated danger to Merewyn wagons arrives
+      due: 0482-01-19 10:00 succession council; immediately when substantiated danger to Merewyn wagons arrives
     drives: {wants: [keep mills operating, honour Aldren when feasible, prevent a second assassination], fears: [convoy ambush, coerced treaty, ruinous food shortage], values: [written commitments, living tenants, family autonomy]}
     relationships:
       elowen_merewyn: {tie: niece and heir, attitude: protective respect, credit: [], grievance: [], believes_identity: capable but grieving}
@@ -325,7 +325,7 @@ npcs:
       position: vane_forward_camp
       status: Coalition assembled to claim the Greyfen boundary; has privately ordered Aldren's assassination via an intermediary.
       plan: Use Sola to pressure the outer gate; offer surrender terms if the approach fails; secure royal ratification after physical control. Keep Merewyn convoys broken without revealing the killing order.
-      due: Year 482, Harvestwane 18 12:00 expects Sola's first report; immediately on any confirmed return of Merewyn supplies
+      due: 0482-01-18 12:00 expects Sola's first report; immediately on any confirmed return of Merewyn supplies
     drives: {wants: [control toll road, land charter and revenues, profitable coalition], fears: [coalition defection, murder order reaching court, prolonged costly siege], values: [leverage, contracts, results]}
     relationships:
       commander_sola: {tie: contracted general, attitude: values competence but does not trust old Ardent loyalty, credit: [], grievance: [], believes_identity: knows gate weaknesses}
@@ -345,7 +345,7 @@ npcs:
       position: outer_gate approach
       status: Leads 110 forward troops. She knows the gate construction from earlier Ardent service but has not breached it.
       plan: Probe the defended causeway, test a plausible weak point, then decide whether to commit ladders, blockade, withdrawal or parley based on loss and response.
-      due: Year 482, Harvestwane 18 07:00 probes the causeway; re-decides after each exchange's losses
+      due: 0482-01-18 07:00 probes the causeway; re-decides after each exchange's losses
     drives: {wants: [fulfil a feasible contract, retain officers' trust, avoid ruinous assaults], fears: [wasted troops, Cassian concealing fatal political risks, unpaid campaign], values: [discipline, promises to her people, competent judgment]}
     relationships:
       captain_joram: {tie: old fellow officer, attitude: critical respect, credit: [], grievance: [], believes_identity: knows the fort's real limitations}
@@ -365,7 +365,7 @@ npcs:
       position: town of Westmere, on the outer road
       status: Holding encoded payment tallies after Aldren's murder; trying to disappear from active coalition politics.
       plan: Collect final pay from Cassian's steward and burn her correspondence only if danger becomes credible.
-      due: Year 482, Harvestwane 20 18:00 coalition pay courier at Westmere; immediately on a verifiable threat
+      due: 0482-01-20 18:00 coalition pay courier at Westmere; immediately on a verifiable threat
     drives: {wants: [payment, personal safety], fears: [arrest, broker exposure], values: [reliable transactions]}
     relationships: {}
     knowledge:
@@ -383,7 +383,7 @@ npcs:
       position: moving between the woods and Westmere
       status: Left traces at the murder scene; believes Lorne still owes him money.
       plan: Demand final settlement from Lorne, then flee beyond the marcher jurisdiction if not obstructed.
-      due: Year 482, Harvestwane 20 dusk pay contact with Lorne at Westmere; immediately on a reliable warning of pursuit
+      due: 0482-01-20 dusk pay contact with Lorne at Westmere; immediately on a reliable warning of pursuit
     drives: {wants: [payment, escape], fears: [identification, betrayal], values: [survival]}
     relationships: {}
     knowledge:
@@ -462,7 +462,7 @@ active_world_pressures:
       segments: 5
       filled: 0
       pace: every 2 in-world days that the coalition has intact supply, mobile forces and actionable road access to advance its positions
-      due: Year 482, Harvestwane 20 06:30
+      due: 0482-01-20 06:30
       on_fill: Coalition detachments establish observable control of the remaining practical wagon approaches where they have actual forces and routes; genuine neutral or hidden alternatives remain subject to their own conditions, not magically erased.
     discovered_information: {}
   ration_shortage:
@@ -476,7 +476,7 @@ active_world_pressures:
       segments: 3
       filled: 0
       pace: every full day of normal consumption without equivalent supply while the present population remains
-      due: Year 482, Harvestwane 19 06:30
+      due: 0482-01-19 06:30
       on_fill: Usable staple stores are depleted for the current population; people and commanders respond through their actual agency, with no automatically predetermined starvation or desertion.
     discovered_information: {}
 locked_case_truths:
@@ -539,7 +539,7 @@ open_suspicions:
     attached_to: house_merewyn
 world_state:
   location: outer_gate
-  time: {season: early autumn, day_index: 0, date: 'Year 482, Harvestwane 18', clock_minutes: 390, daypart: dawn, precision: exact}
+  time: {season: early autumn, day_index: 0, date: '0482-01-18', clock_minutes: 390, daypart: dawn, precision: exact}
   environment:
     weather: cool drizzle over a foggy ravine
     roads: Greystep bridge damaged; wagon access from Merewyn suspended but horse passage possible with care

@@ -27,15 +27,11 @@ def test_a_real_chat_made_save_loads_and_plays():
     assert w.get("npcs.eli_voss.state.status") == "eats breakfast" and w.round == 11
 
 
-def test_plans_written_as_text_in_the_save_are_split_by_the_first_intake():
+def test_plans_written_as_text_in_the_save_are_read_by_the_program():
     w, _ = savefile.import_save(SAVE, BG)
-    assert w.needs_intake()
-    todo = w.needs_intake()
-    good = {"actors": [{"id": p, "dues": [{"day_offset": 1, "at": "dawn", "what": "x"}] if not p.startswith("active") else [{"day_offset": 3, "at": "04:00", "what": "x"}],
-                        "triggers": [], "interval_minutes": 1440} for p in todo]}
-    llm = Scripted([good] * 10)
-    flow.intake(w, llm, batch=30)
-    assert not w.needs_intake()
+    assert not any(w.get(p + ".plan.text") for p in w.needs_intake() if not p.startswith("active"))      # no AI needed to read a date
+    assert w.get("npcs.dale.plan.dues")[0]["day"] == 3 and w.get("npcs.ada_hale.plan.dues")[0]["day"] == 5     # R10 stamps and all
+    assert w.get("active_world_pressures.glass_spread.clock.due_at")
 
 
 def test_export_then_import_gives_the_same_world_back(tmp_path):

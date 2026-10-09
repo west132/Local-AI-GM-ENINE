@@ -5,6 +5,8 @@ The person gave a short idea. Turn it into the setting. Everything they asked fo
 ```text
 SOURCE   idea names a game, book, show or film → source_game = its name, mode = canon, canon_scope = what is fixed
   (history before the start) and that its main course is the actors' default plan. No source → source_game "", mode original.
+CALENDAR  there is one calendar, YYYY-MM-DD, in every world (a fantasy world uses a year like 0482 and day numbers). Never invent a calendar,
+  month names or a year-count of the world's own: the program reads dates and cannot read those.
 START    an opening moment the story really begins at, not a summary: date YYYY-MM-DD, clock HH:MM, daypart, season, weather.
 ANCHORS  only what stops incompatible invention later: who lives here, what powers exist and their limits, technology, who rules,
   money and trade, what threatens. One line each. Never leave a required list empty; write "none" if there truly is none.

@@ -6,6 +6,32 @@ import json, re, urllib.request
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 
 
+def close_json(text: str) -> str:
+    """A reply cut off by the token limit: close the open string and brackets so it can be read and checked field by field."""
+    stack, in_str, esc, out = [], False, False, []
+    for ch in text:
+        out.append(ch)
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]" and stack:
+            stack.pop()
+    s = "".join(out)
+    if in_str:
+        s += '"'
+    s = re.sub(r'[,:\s]+$', "", s)
+    s = re.sub(r',\s*"[^"]*"$', "", s)               # a key with no value yet
+    return s + "".join(reversed(stack))
+
+
 def parse_json(text: str):
     text = _THINK.sub("", text).strip()
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
@@ -13,9 +39,15 @@ def parse_json(text: str):
         return json.loads(text)
     except json.JSONDecodeError:
         m = re.search(r"\{.*\}", text, re.S)
-        if not m:
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except json.JSONDecodeError:
+                pass
+        start = text.find("{")
+        if start < 0:
             raise
-        return json.loads(m.group(0))
+        return json.loads(close_json(text[start:]))
 
 
 def _finish(text: str, schema):

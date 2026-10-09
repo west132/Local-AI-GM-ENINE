@@ -71,3 +71,15 @@ def render(schema: dict, indent: int = 0) -> str:
         elif t == "array" and s.get("items", {}).get("type") == "object":
             lines.append(render(s["items"], indent + 1))
     return "\n".join(lines)
+
+
+def cap_arrays(sch, default: int = 40, steps: int = 6):
+    """A copy of the schema in which every array has an upper length (the model's decoder then cannot run on forever)."""
+    if isinstance(sch, dict):
+        out = {k: cap_arrays(v, default, steps) for k, v in sch.items()}
+        if out.get("type") == "array" and "maxItems" not in out:
+            out["maxItems"] = steps if out.get("items", {}).get("enum") else default
+        return out
+    if isinstance(sch, list):
+        return [cap_arrays(v, default, steps) for v in sch]
+    return sch
