@@ -200,8 +200,10 @@ def endings_world():
 def test_a_met_ending_ends_the_scenario_and_conditions_cannot_be_rewritten():
     w = endings_world()
     assert w.commit([{"op": "set", "path": "ending_conditions.core_conditions", "value": []}])
-    llm = Scripted([{"kind": "loop", "steps": ["judge"]}, {"verdict": "certain", "cites": ["player"]}, {"met": ["core.0"], "closed": []}, "Done.", OK])
+    llm = Scripted([{"kind": "loop", "steps": ["judge"]}, {"verdict": "certain", "cites": ["player"]}, {"met": ["core.0"], "closed": []}, "Done.", OK,
+                    "Tobias reads the note twice and pockets it. The guesthouse goes on without you; Hobb tells the story for years."])
     t = flow.run_turn(w, llm, "I hand Tobias the envelope")
+    assert "Hobb tells the story for years" in t.prose and t.ended_now
     assert any("ENDING REACHED" in f for f in t.facts) and w.tree["ending_state"]["met"] == "core.0"
     with pytest.raises(flow.ScenarioEnded):
         flow.run_turn(w, Scripted([FAST]), "more")

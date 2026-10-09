@@ -87,12 +87,10 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str], int]:
             facts.append(f"The player finished the downed {foe}; it is {h['state']}.")
     if out.get("stop"):
         facts.append(f"Orders stop here: {out['stop']}")
-    if downed and lv0 is not None:      # combat XP: each foe overcome, against the level held at the start, summed once
-        total = sum(M.xp_award(int(world.tree["npcs"][f].get("v", 1)), lv0, "meaningful") for f in downed)
-        st = world.player["progression"]["state"]
-        st["level"], st["xp"], ups = M.add_xp(st["level"], st["xp"], total)
+    if downed and lv0 is not None:      # combat XP: each foe overcome, against the level held at the start, one pass for everyone
+        msgs = rules.xp_pass(world, [int(world.tree["npcs"][f].get("v", 1)) for f in downed], "meaningful")
         for f in downed:
             world.tree["npcs"][f]["xp_paid"] = True
         world.tree["world_state"].setdefault("material_history", []).append(f"Combat in round {world.round + 1}: {', '.join(downed)} overcome.")
-        facts.append(f"The player earned {total} XP." + (f" Level up to {ups[-1]}." if ups else ""))
+        facts += msgs
     return lines, facts, owed

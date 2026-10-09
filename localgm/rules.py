@@ -92,19 +92,59 @@ def growth_boundary(w: World, sources: dict[str, str]) -> list[str]:
             out.append(f"Skill {name} was raised to {g['class_raised']} through {src}.")
     gp = w.player.setdefault("growth_period", {})
     gp["opened"], gp["credited"] = w.time["day_index"], []
+    for rid, r in companions(w).items():
+        for name, sk in ((r.get("capability") or {}).get("skills") or {}).items():
+            g = M.grow(sk["class"], sk["tier"], int(sk.get("growth_evidence", 0)), int(sk.get("ceiling_evidence", 0)), False)
+            sk["tier"], sk["class"] = g["tier"], g["class"]
+            sk["growth_evidence"], sk["ceiling_evidence"] = g["growth_evidence"], g["ceiling_evidence"]
+            if g["tiers_raised"]:
+                out.append(f"{r.get('name', rid)}'s {name} rose to {g['tiers_raised'][-1]}.")
     return out + injury_boundary(w)
 
 
 # ---------- XP ----------
 
-def award_xp(w: World, challenge: int, scope: str) -> str | None:
-    lv = w.player.get("progression")
-    if not lv or not module(w, "numeric_level_xp"):
-        return None
-    st = lv["state"]
-    amount = M.xp_award(challenge, st["level"], scope)
+def companions(w: World) -> dict[str, dict]:
+    """Tracked companions: people whose level and skills the engine follows alongside the player's."""
+    return {rid: r for rid, r in (w.tree.get("npcs") or {}).items()
+            if isinstance(r, dict) and (r.get("capability") or {}).get("tracked")}
+
+
+def xp_pass(w: World, challenges: list[int], scope: str) -> list[str]:
+    """One pass when a scope resolves: the player and every tracked companion each get the full award against
+    their own level, together (never split by party size)."""
+    if not module(w, "numeric_level_xp") or not w.player.get("progression") or not challenges:
+        return []
+    out = []
+    st = w.player["progression"]["state"]
+    amount = sum(M.xp_award(c, st["level"], scope) for c in challenges)
     st["level"], st["xp"], ups = M.add_xp(st["level"], st["xp"], amount)
-    return f"The player earned {amount} XP." + (f" Level up to {ups[-1]}." if ups else "")
+    out.append(f"The player earned {amount} XP." + (f" Level up to {ups[-1]}." if ups else ""))
+    for rid, r in companions(w).items():
+        cap = r["capability"]
+        amt = sum(M.xp_award(c, int(cap["overall_level"]), scope) for c in challenges)
+        cap["overall_level"], cap["xp"], ups = M.add_xp(int(cap["overall_level"]), int(cap.get("xp", 0)), amt)
+        out.append(f"{r.get('name', rid)} earned {amt} XP." + (f" Level up to {ups[-1]}." if ups else ""))
+    return out
+
+
+def award_xp(w: World, challenge: int, scope: str) -> str | None:
+    msgs = xp_pass(w, [challenge], scope)
+    return " ".join(msgs) if msgs else None
+
+
+def set_companion(w: World, rid: str, level: int | None, joins: bool) -> str:
+    r = (w.tree.get("npcs") or {}).get(rid)
+    if not isinstance(r, dict):
+        raise M.RuleError(f"no such person {rid!r}")
+    cap = r.setdefault("capability", {})
+    if joins:
+        if level is None or not 1 <= int(level) <= M.LEVEL_CAP:
+            raise M.RuleError("a companion needs its level (1..35)")
+        cap.update(tracked=True, overall_level=int(level), xp=int(cap.get("xp", 0)))
+        return f"{r.get('name', rid)} now travels with the player and gains experience alongside them."
+    cap["tracked"] = False
+    return f"{r.get('name', rid)} no longer travels with the player."
 
 
 # ---------- quests (14) ----------

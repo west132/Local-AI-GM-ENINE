@@ -1,6 +1,8 @@
 ## 7. Is it possible?
 
 ```text
+ASK FIRST  if the roll depends on an answer you do not have yet (does the person let you handle it, is the way open),
+  give verdict `ask` with those questions in `asks`; the program answers and asks you again; then set the roll up.
 CITE  every verdict names the records it rests on (cites: record paths such as npcs.hobb_marren.state.status).
   certain / impossible: cite what settles it. roll: cite what bounds it, and say in `uncertain` what remains open.
   A path that does not exist is refused. Nothing is settled by something the records do not hold.

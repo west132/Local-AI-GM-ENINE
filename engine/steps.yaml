@@ -9,6 +9,20 @@
 # The AI never rolls, adds, keeps time or writes a save. It decides, and the program rolls and records.
 # Order matters: a roll or ask is resolved by the program BEFORE the AI is asked what follows from it.
 
+defs:
+  askitem: &askitem
+      type: object
+      required: [question, obvious, likelihood]
+      properties:
+        question:   {type: string, description: "yes/no, ending in ?"}
+        obvious:    {type: string, description: "the obvious answer if one exists, as 'YES - why' or 'NO - why' (nothing is rolled); otherwise exactly 'none'"}
+        likelihood: {type: integer, minimum: -3, maximum: 3}
+        for:        {type: string}
+        against:    {type: string}
+        cites:      {type: array, items: {type: string}, description: "record paths behind the question; they must exist"}
+        governs:    {type: array, items: {type: string}, description: "record paths the answer decides"}
+        changed:    {type: string, description: "if this question was answered before: what is materially new"}
+
 # Run once when a game starts (flow.intake), not every turn.
 intake:
   id: intake
@@ -61,13 +75,17 @@ turn:
   - id: judge
     when: "'judge' in sort.steps"
     rules: [04_truth, 07_possible, 08_roll_setup, 09_stakes]
-    input: [player_text, place, player_state, records_in_play, resolved_facts]
+    input: [player_text, place, player_state, records_in_play, results_so_far, resolved_facts]
     output:
       type: object
       required: [verdict, cites]
       properties:
-        verdict:  {type: string, enum: [certain, impossible, roll]}
+        verdict:  {type: string, enum: [certain, impossible, roll, ask]}
         reason:   {type: string}
+        asks:
+          type: array
+          description: "with verdict 'ask' only: questions whose answers you need BEFORE you can set this up (e.g. whether someone lets you handle the thing). The program answers, then asks you again."
+          items: *askitem
         cites:    {type: array, items: {type: string}, description: "record paths this verdict rests on; they must exist"}
         uncertain: {type: string, description: "for a roll: what exactly remains open"}
         roll:
@@ -148,18 +166,7 @@ turn:
       properties:
         asks:
           type: array
-          items: &askitem
-            type: object
-            required: [question, obvious, likelihood]
-            properties:
-              question:   {type: string, description: "yes/no, ending in ?"}
-              obvious:    {type: string, description: "the obvious answer if one exists, as 'YES - why' or 'NO - why' (nothing is rolled); otherwise exactly 'none'"}
-              likelihood: {type: integer, minimum: -3, maximum: 3}
-              for:        {type: string}
-              against:    {type: string}
-              cites:      {type: array, items: {type: string}, description: "record paths behind the question; they must exist"}
-              governs:    {type: array, items: {type: string}, description: "record paths the answer decides"}
-              changed:    {type: string, description: "if this question was answered before: what is materially new"}
+          items: *askitem
     program: ask_roll
 
   # C: the AI is told the results and says what follows from them. D: the program validates and commits, all or nothing.
@@ -194,6 +201,16 @@ turn:
         rest:   {type: string, enum: [none, rest, sleep], description: "rest = the time was spent resting; sleep = a full night's sleep"}
         boundary: {type: string, enum: [none, training, aftermath], description: "a growth boundary: dedicated training or downtime, or the settled aftermath of a resolved arc (sleep counts by itself)"}
         class_sources: {type: object, description: "skill_id -> the class source materially involved while evidence accrued (teacher, institution, method, tested innovation)"}
+        companion_join:
+          type: array
+          description: "people who now travel with the player (needs causal support in the records); the program tracks their level and XP"
+          items:
+            type: object
+            required: [id, level]
+            properties:
+              id:    {type: string}
+              level: {type: integer, minimum: 1, maximum: 35}
+        companion_leave: {type: array, items: {type: string}, description: "ids of tracked companions who stop travelling with the player"}
         heal:
           type: array
           description: "healing the player or someone gave this turn"
@@ -301,6 +318,29 @@ turn:
         closed: {type: array, items: {type: string}, description: "ids now permanently unreachable"}
     program: ending
 
+  - id: checkpoint
+    when: "turn.checkpoint_due"
+    rules: [20_checkpoint]
+    input: [open_items, resolved_facts]
+    output:
+      type: object
+      required: [ops]
+      properties:
+        ops:
+          type: array
+          description: "close what the records show is settled; nothing new"
+          items:
+            type: object
+            required: [op, path]
+            properties:
+              op:      {type: string, enum: [set, append, remove]}
+              path:    {type: string}
+              value:   {}
+              because: {type: string, description: "the record that shows it is settled"}
+              requires: {type: object, properties: {on: {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}}}
+        notes: {type: array, items: {type: string}, description: "open items you left open, and why"}
+    program: commit_ops
+
   - id: tell
     when: "not turn.halt"
     rules: [15_telling_it]
@@ -320,3 +360,11 @@ turn:
         ok:       {type: boolean}
         problems: {type: array, items: {type: string}}
     program: audit
+
+  - id: epilogue
+    when: "turn.ended_now"
+    rules: [21_epilogue]
+    input: [place, facts_from_program, story_so_far]
+    max_tokens: 700
+    output: {type: string}
+    program: epilogue

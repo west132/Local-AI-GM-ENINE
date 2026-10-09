@@ -75,3 +75,15 @@ def test_the_play_lessons_are_in_the_prompts_that_need_them():
     for sid in ("sort", "wonder", "react", "fight"):
         text = flow.rules_text(steps[sid]["rules"])
         assert "never roll to avoid being the one who said yes" in text and "NEUTRAL" in text, sid
+
+
+def test_a_roll_can_wait_for_the_answer_it_depends_on(monkeypatch):
+    from test_flow import LOOP_JUDGE, roll_form, force_check
+    force_check(monkeypatch, True)
+    counting_ask(monkeypatch, "YES")
+    w = world()
+    first = {"verdict": "ask", "cites": [], "asks": [{"question": "Does Hobb let Rin handle the ledger?", "obvious": "none", "likelihood": 0}]}
+    llm = Scripted([LOOP_JUDGE, first, roll_form(base=10, committed=True), "ok", OK])
+    t = flow.run_turn(w, llm, "I check the ledger for the stolen entry")
+    assert "Does Hobb let Rin handle the ledger?' → YES" in llm.seen[2][1]        # the roll was set up knowing the answer
+    assert any(l.startswith("2d10") for l in t.lines) and t.ask_rounds == 1

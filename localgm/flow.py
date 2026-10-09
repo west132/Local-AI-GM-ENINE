@@ -55,6 +55,8 @@ class Turn:
         self.rolled = 0                 # questions the dice settled this turn
         self.settled = 0                # questions the records settled (no dice)
         self.ask_rounds = 0             # times the reaction asked for more results before deciding
+        self.ended_now = False          # an ending was reached in this turn: the last recap follows
+        self.checkpoint_due = (world.round + 1) % 10 == 0     # this turn closes a tenth round
         self.injury_owed = 0            # lasting injuries the player must be given (named by the AI, recorded by the program)
         self.shape = None               # SHORT | LONG | CHAIN when a new offer's shape was rolled this turn
         self.hidden: list[str] = []     # records changed that the narrator must not be told about
@@ -114,6 +116,26 @@ def pressures(world: World) -> str:
     return "\n".join(out) or "PRESSURES: none"
 
 
+def open_items(w: World) -> str:
+    """Everything still open, for the ten-round check: quests, rights, payoffs, threads, trackers, clocks."""
+    t, out = w.tree, []
+    for q, r in (t.get("quests") or {}).items():
+        if isinstance(r, dict) and r.get("status") not in rules.TERMINAL:
+            out.append(f"quest {q} [{r.get('status')}]: {r.get('objective', '')[:160]}")
+    for k, r in (t.get("rights_obligations") or {}).items():
+        st = (r.get("state") or {}) if isinstance(r, dict) else {}
+        if str(st.get("status", "")).startswith(("active", "open")) or not st.get("status"):
+            out.append(f"right {k}: {json.dumps(r, ensure_ascii=False)[:260]}")
+    for k in ("pending_payoffs", "unresolved_consequences", "active_commitments"):
+        for item in t.get(k) or []:
+            out.append(f"{k[:-1] if k.endswith('s') else k}: {json.dumps(item, ensure_ascii=False)[:200]}")
+    for k, r in (t.get("development_threads") or {}).items():
+        out.append(f"thread {k}: {json.dumps(r, ensure_ascii=False)[:200]}")
+    for k, r in (t.get("trackers") or {}).items():
+        out.append(f"tracker {k}: {r.get('name')} {r.get('current')}/{r.get('target')}")
+    return "OPEN ITEMS:\n" + ("\n".join(out) or "none")
+
+
 def inputs(step: dict, turn: Turn) -> str:
     w, parts, scene_done = turn.world, [], False
     for name in step["input"]:
@@ -144,6 +166,11 @@ def inputs(step: dict, turn: Turn) -> str:
             qs = [f"{q}: {r.get('objective', '')[:140]} [{r.get('status', '')}]" for q, r in (w.tree.get("quests") or {}).items()
                   if isinstance(r, dict)]
             parts.append("QUESTS:\n" + ("\n".join(qs) or "none"))
+        elif name == "open_items":
+            parts.append(open_items(w))
+        elif name == "story_so_far":
+            qs = [f"{q}: {r.get('objective', '')[:120]} [{r.get('status')}]" for q, r in (w.tree.get("quests") or {}).items() if isinstance(r, dict)]
+            parts.append("HOW IT WENT:\n" + rules.ledger_text(w, 25) + "\n\nQUESTS:\n" + "\n".join(qs) + "\n\n" + brief(w))
         elif name == "resolved_facts":
             parts.append("ALREADY RESOLVED IN THIS CAMPAIGN (binding; not rolled again unless something material changed):\n" + rules.ledger_text(w))
         elif name == "results_so_far":
@@ -230,6 +257,14 @@ def _bind(turn: Turn, key: str, e: dict, governs: list[str]) -> None:
 
 
 def h_roll(turn: Turn, out: dict):
+    if out["verdict"] == "ask":              # the setup depends on answers the AI does not have yet
+        if not out.get("asks"):
+            raise M.RuleError("verdict 'ask' needs the questions in 'asks'")
+        if turn.ask_rounds >= 4:
+            raise M.RuleError("no more questions this turn: give a verdict with the results you have")
+        turn.ask_rounds += 1
+        do_asks(turn, out["asks"])
+        return "ask_again"
     rules.check_cites(turn.world, out.get("cites", []))
     if out["verdict"] in ("impossible", "certain") and not out.get("cites"):
         raise M.RuleError("an impossible or certain verdict must cite the records that settle it (cites)")
@@ -402,6 +437,10 @@ def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], fa
             new_fills.append(f"{pid} FULL — {res['on_fill']}")
     faults += [f"clock {pid} was shown as due; answer it in 'clocks'" for pid in shown if pid not in answered]
     try:
+        for c in out.get("companion_join", []):
+            facts.append(rules.set_companion(trial, c["id"], c["level"], True))
+        for cid in out.get("companion_leave", []):
+            facts.append(rules.set_companion(trial, cid, None, False))
         for h in out.get("heal", []):
             line, fact = rules.heal_target(trial, h["who"], h["source"])
             lines.append(line); facts.append(fact)
@@ -548,6 +587,7 @@ def h_ending(turn: Turn, out: dict):
     facts = rules.ending_update(trial, out["met"], out["closed"])
     turn.world.tree = trial.tree
     turn.facts += facts
+    turn.ended_now = bool((turn.world.tree.get("ending_state") or {}).get("met"))
 
 
 def clean(prose: str) -> str:
@@ -583,6 +623,10 @@ def h_show(turn: Turn, out: str):
     turn.prose = rules.redact(prose, terms) if bad else prose
 
 
+def h_epilogue(turn: Turn, out: str):
+    turn.prose = (turn.prose + "\n\n" + clean(out)).strip()
+
+
 def h_audit(turn: Turn, out: dict):
     if not out["ok"]:
         turn.facts.append("FIX IN THE RETELLING: " + "; ".join(out.get("problems", [])))
@@ -591,7 +635,7 @@ def h_audit(turn: Turn, out: dict):
 
 HANDLERS = {"route": h_route, "roll": h_roll, "roll_pending": h_roll_pending, "combat": h_combat, "ask_roll": h_ask_roll,
             "commit": h_commit, "shape_roll": h_shape_roll, "commit_ops": h_commit_ops, "record_injury": h_record_injury,
-            "ending": h_ending, "show": h_show, "audit": h_audit}
+            "ending": h_ending, "epilogue": h_epilogue, "show": h_show, "audit": h_audit}
 
 
 # ---------- the loop ----------

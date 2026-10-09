@@ -14,7 +14,8 @@ from . import clock, mechanics as M
 OWNED = (r"round", r"world_state\.time", r"player\.condition\.(hp|mp)", r"player\.money",
          r"player\.resources", r"player\.progression", r"player\.skills\.[^.]+\.(class|tier|growth_evidence|ceiling_evidence)",
          r"trackers", r"journal", r"pending", r"player\.item_points", r"player\.growth_period",
-         r"ending_conditions", r"ending_state", r"resolved")
+         r"ending_conditions", r"ending_state", r"resolved",
+         r"npcs\.[^.]+\.capability\.(tracked|overall_level|xp)")
 _OWNED = [re.compile(p + r"(\.|$)") for p in OWNED]
 
 
@@ -339,6 +340,8 @@ class World:
             rec = self.tree["npcs"][who]
             cond = rec.setdefault("state", {})
         v = rec.get("v")
+        if v is None and (rec.get("capability") or {}).get("overall_level"):
+            v = rec["capability"]["overall_level"]
         if v is None:
             v = {"ordinary": 1, "seasoned": 3, "veteran": 5, "exceptional": 8, "heroic": 11,
                  "legendary": 20}.get(rec.get("vitality", "ordinary"), 1)
