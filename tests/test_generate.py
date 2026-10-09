@@ -36,7 +36,9 @@ def test_generates_a_world_that_loads_and_plays():
     assert "Parry Strike" in t["player"]["skills"]["swordwork"]["abilities"]
     assert all(" " in n["name"] for n in t["npcs"].values()) and all(n["gender"] for n in t["npcs"].values())
     assert t["npcs"]["mara_voss"]["plan"]["dues"][0]["clock"] == 540        # 09:00 became a due the program tracks
-    assert w.needs_intake() == ["npcs.dorn_pell", "active_world_pressures.wolf_spread"]  # a trigger and a clock go to the start-up step
+    assert w.needs_intake() == []                      # the program read the clock times, the trigger and the pressure's first check itself
+    assert w.tree["npcs"]["dorn_pell"]["plan"]["triggers"] == ["when the gate opens"]
+    assert w.tree["active_world_pressures"]["wolf_spread"]["clock"]["due_at"]["day"] == 3
     assert t["world_state"]["location"] == "toll_gate" and t["locked_case_truths"]["pit_cause"]["evidence"]["routes"]
 
 

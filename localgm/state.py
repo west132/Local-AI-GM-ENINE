@@ -98,6 +98,83 @@ def _every_days(v) -> int:
     return {"daily": 1, "weekly": 7, "monthly": 30, "fortnightly": 14}.get(str(v).strip().lower(), 7)
 
 
+_LEAD = re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2}|dawn|morning|noon|midday|afternoon|dusk|evening|night|midnight)\b[\s,:\-]*(.*)$",
+                   re.I | re.S)
+_ANY_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _day_of(t: dict, y: int, mo: int, d: int) -> int | None:
+    m0 = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", str(t.get("date") or ""))
+    if not m0:
+        return None
+    try:
+        return t["day_index"] + (_dt.date(y, mo, d) - _dt.date(*map(int, m0.groups()))).days
+    except ValueError:
+        return None
+
+
+def parse_note(note: str, t: dict, move: str = ""):
+    """A plan note is clauses split by ';'. A clause that starts with 'YYYY-MM-DD HH:MM' (or dawn/noon/…) is a due on the clock;
+    a clause with no date is a trigger (a condition, no clock). A date anywhere else in a clause is ambiguous: return None and
+    let the AI read the whole note (its dates are then checked against this text, see dates_in)."""
+    dues, trig = [], []
+    for clause in [c.strip() for c in str(note).split(";") if c.strip()]:
+        m = _LEAD.match(clause)
+        if m:
+            day = _day_of(t, int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            try:
+                at = at_minutes(m.group(4))
+            except ValueError:
+                return None
+            if day is None:
+                return None
+            dues.append({"day": day, "clock": at, "what": m.group(5).strip() or move})
+        elif _ANY_DATE.search(clause) or re.search(r"\d{1,2}:\d{2}", clause) or \
+                (re.search(r"\d", clause) and re.search(r"\b(dawn|morning|noon|midday|afternoon|dusk|evening|night|midnight)\b", clause, re.I)):
+            return None          # some kind of calendar time that is not 'YYYY-MM-DD HH:MM': the intake step reads the whole note
+        else:
+            trig.append(clause)
+    return dues, trig
+
+
+def dates_in(note: str, t: dict) -> list[tuple[int, int | None]]:
+    """Every 'YYYY-MM-DD [HH:MM]' written in a note as (day_index, clock minutes or None): what the AI's answer must contain."""
+    out = []
+    for m in re.finditer(r"(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2}:\d{2}))?", str(note)):
+        day = _day_of(t, int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        if day is not None:
+            out.append((day, at_minutes(m.group(4)) if m.group(4) else None))
+    return out
+
+
+_EVERY = re.compile(r"every\s+(\d+|a|one|two|three)?\s*(night|day|week|month|hour)s?", re.I)
+_NUM = {"a": 1, "one": 1, "two": 2, "three": 3}
+
+
+def clock_interval(pace: str) -> int | None:
+    m = _EVERY.search(str(pace))
+    if not m:
+        return None
+    n = m.group(1)
+    n = 1 if n is None else (int(n) if n.isdigit() else _NUM[n.lower()])
+    return n * {"hour": 60, "night": 1440, "day": 1440, "week": 10080, "month": 43200}[m.group(2).lower()]
+
+
+def _normalize_clocks(tree: dict) -> None:
+    """A pressure's first check written as 'YYYY-MM-DD HH:MM' with a pace 'every N units' is read here, not by the AI."""
+    t = tree["world_state"]["time"]
+    for pr in (tree.get("active_world_pressures") or {}).values():
+        c = pr.get("clock") if isinstance(pr, dict) else None
+        if not isinstance(c, dict) or c.get("due_at") or not c.get("due"):
+            continue
+        m = re.match(r"^\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2})\s*$", str(c["due"]))
+        iv = clock_interval(c.get("pace", ""))
+        day = _day_of(t, *map(int, m.groups()[:3])) if m else None
+        if m and iv and day is not None:
+            c["due_at"] = {"day": day, "clock": at_minutes(m.group(4))}
+            c["interval_minutes"] = iv
+
+
 def _normalize_plans(tree: dict) -> None:
     """BACKGROUND writes an actor's plan as state.plan + state.due (free text). Make one plan record:
     {move, dues:[{day, clock, what}], triggers:[text]}. A single plain ISO due is converted here; anything
@@ -113,13 +190,10 @@ def _normalize_plans(tree: dict) -> None:
                 continue
             plan = {"move": st.pop("plan"), "dues": [], "triggers": []}
             due = st.pop("due", None)
-            m = _ISO_DUE.match(str(due or ""))
-            m0 = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", str(t.get("date") or ""))
-            if m and m0 and "immediately" not in due:
-                days = (_dt.date(*map(int, m.groups()[:3])) - _dt.date(*map(int, m0.groups()))).days
-                plan["dues"].append({"day": t["day_index"] + days, "clock": int(m.group(4)) * 60 + int(m.group(5)),
-                                     "what": m.group(6).strip()})
-            elif due:
+            parsed = parse_note(str(due), t, plan["move"]) if due else None
+            if parsed:                                   # every clause is a plain clock time or a plain condition: the program reads it
+                plan["dues"], plan["triggers"] = parsed
+            elif due:                                    # a date buried in a sentence: the one-time intake step reads it, and its dates are checked
                 plan["text"] = str(due)
             rec["plan"] = plan
 
@@ -129,6 +203,7 @@ class World:
         self.tree = tree
         self.round = round_no
         _normalize_plans(tree)
+        _normalize_clocks(tree)
         self.ensure_work()
         p = tree.get("player") or {}
         if (tree.get("enabled_modules") or {}).get("flexible_item_entitlement") and "item_points" not in p:

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import yaml
 
 from . import combat, mechanics as M, rules, schema
-from .state import World, WriteRefused
+from .state import World, WriteRefused, at_minutes, dates_in
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent / "engine"
 on_step = None      # the app sets this to show which step is running
@@ -139,7 +139,11 @@ def open_items(w: World) -> str:
 def inputs(step: dict, turn: Turn) -> str:
     w, parts, scene_done = turn.world, [], False
     for name in step["input"]:
-        if name == "player_text":
+        if name == "player_who":
+            ident = (w.player.get("identity") or {})
+            parts.append(f"THE PLAYER CHARACTER (\"you\" in the telling): {ident.get('name', 'the player')}, {w.player.get('job') or w.player.get('archetype') or ''}. "
+                         f"{w.player.get('character', '')} Every other name is someone else; they are not \"you\".".replace("  ", " "))
+        elif name == "player_text":
             parts.append(f"PLAYER: {turn.text}")
         elif name in ("place", "actors_present"):
             if not scene_done:               # the place and who is in it are shown once, however many names ask for them
@@ -682,6 +686,22 @@ def execute(llm, step: dict, turn: Turn):
     turn.facts.append(f"(Step {step['id']} could not be recorded; narrate none of its changes.)")
 
 
+def _check_dates(world: World, a: dict) -> None:
+    """Every date the note writes must come back as a due on that day (and time, when written). The program reads the calendar."""
+    note = world.get(a["id"] + ".plan.text") or ""
+    base = world.time["day_index"]
+    got = []
+    for d in a["dues"]:
+        try:
+            got.append((base + int(d["day_offset"]), at_minutes(d["at"])))
+        except (ValueError, KeyError):
+            pass
+    for day, clock_ in dates_in(note, world.time):
+        if not any(g[0] == day and (clock_ is None or g[1] == clock_) for g in got):
+            when = f"day_offset {day - base}" + (f" at {clock_ // 60:02d}:{clock_ % 60:02d}" if clock_ is not None else "")
+            raise ValueError(f"the note gives a date that is {when}; no due of yours is on it")
+
+
 def intake(world: World, llm, batch: int = 4) -> None:
     """Once per new game: the AI splits each plan note into dues and triggers; the program stores them."""
     step = load_intake()
@@ -706,6 +726,7 @@ def intake(world: World, llm, batch: int = 4) -> None:
                     if a["id"].startswith("active_world_pressures."):
                         world.set_clock(a["id"], a["dues"][0], a.get("interval_minutes"))
                     else:
+                        _check_dates(world, a)
                         world.set_dues(a["id"], a["dues"], a["triggers"])
                 except (ValueError, KeyError, IndexError, WriteRefused) as e:
                     problems += f"\n- {a['id']}: {e}"

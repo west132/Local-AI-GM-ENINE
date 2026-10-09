@@ -228,7 +228,7 @@ def test_hard_backgrounds_load_and_nothing_is_silently_dropped(name):
     for kind in ("npcs", "factions"):
         for rid, r in (w.tree.get(kind) or {}).items():
             p = (r.get("plan") or {}) if isinstance(r, dict) else {}
-            assert p.get("dues") or p.get("text") or not p or f"{kind}.{rid}" in todo
+            assert p.get("dues") or p.get("text") or p.get("triggers") or not p or f"{kind}.{rid}" in todo
     assert len(flow.scene(w, True)) < 8000
 
 
@@ -356,3 +356,38 @@ def test_a_telling_that_just_repeats_the_player_is_sent_back():
         flow.h_show(t, "I take Nadia's case at $700 flat, $350 up front.")
     flow.h_show(t, "Nadia reads the figure back off her folder and nods once.")
     assert t.prose.startswith("Nadia")
+
+
+def test_the_program_reads_dated_notes_itself():
+    from localgm.state import parse_note
+    t = {"date": "2026-10-06", "day_index": 0}
+    dues, trig = parse_note("2026-10-07 00:30 on Rusk's freight run; immediately if discovered", t, "m")
+    assert dues == [{"day": 1, "clock": 30, "what": "on Rusk's freight run"}] and trig == ["immediately if discovered"]
+    assert parse_note("2026-10-07 dawn to reconsider", t)[0][0]["clock"] == 360
+    assert parse_note("at the first reply; if unanswered, 2026-10-06 20:30 she leaves", t) is None       # a date inside a sentence: the AI reads it
+    assert parse_note("Year 482, Harvestwane 19 12:00 messenger due back", t) is None                    # another calendar: the AI reads it
+
+
+def test_the_ai_cannot_move_a_date_the_note_gives():
+    w = world("ashfall_hunter")
+    path = "npcs.nadia_voss"
+    assert w.get(path + ".plan.text")                       # her note has a date inside a sentence, so the AI reads it
+    wrong = {"id": path, "dues": [{"day_offset": 1, "at": "20:30", "what": "x"}], "triggers": []}
+    with pytest.raises(ValueError, match="no due of yours is on it"):
+        flow._check_dates(w, wrong)
+    flow._check_dates(w, {"id": path, "dues": [{"day_offset": 0, "at": "20:30", "what": "x"}], "triggers": []})
+
+
+def test_a_pressure_with_a_dated_first_check_and_a_pace_is_set_by_the_program():
+    w = world("ashfall_hunter")
+    c = w.tree["active_world_pressures"]["glass_spread"]["clock"]
+    assert c["due_at"] == {"day": 4, "clock": 19 * 60 + 40} and c["interval_minutes"] == 4 * 1440
+
+
+def test_the_telling_is_told_who_the_player_character_is():
+    w = world("ashfall_hunter")
+    t = flow.Turn(w, "I look around")
+    for sid in ("tell", "audit", "sort"):
+        step = next(s for s in flow.load_steps() if s["id"] == sid)
+        text = flow.inputs(step, t)
+        assert "THE PLAYER CHARACTER" in text and "Rin Hale" in text, sid

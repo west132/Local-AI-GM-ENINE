@@ -56,7 +56,7 @@ turn:
   - id: sort
     when: always
     rules: [01_jobs, 03_invariants, 05_player_side, 06_sorting, 19_play_lessons]
-    input: [player_text, place, active_quests, pending]
+    input: [player_who, player_text, place, active_quests, pending]
     output:
       type: object
       required: [kind, steps]
@@ -345,7 +345,7 @@ turn:
   - id: tell
     when: "not turn.halt"
     rules: [15_telling_it]
-    input: [place, facts_from_program, player_text]
+    input: [player_who, place, facts_from_program, player_text]
     max_tokens: 500
     output: {type: string}
     program: show
@@ -353,7 +353,7 @@ turn:
   - id: audit
     when: "not turn.halt"
     rules: [03_invariants, 15_telling_it]
-    input: [place, prose, facts_from_program]
+    input: [player_who, place, prose, facts_from_program]
     output:
       type: object
       required: [ok]
