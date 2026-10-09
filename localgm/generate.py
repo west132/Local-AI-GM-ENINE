@@ -250,7 +250,8 @@ def assemble(ctx: dict) -> str:
     npcs = {}
     for n in cs["npcs"]:
         rec = {"name": n["name"], "job": n["job"], "belongs": [slug(b) for b in n["belongs"]], "gender": n["gender"], "character": n["character"],
-               "state": {"status": n["status"], "position": slug(n["position"]), "plan": n["plan"], "due": n["due"]},
+               "state": {"status": n["status"], "position": slug(n["position"]), "plan": n["plan"], "due": n["due"],
+                         **({"work_source": n["work_source"]} if n.get("work_source", "").strip() else {})},
                "drives": {"wants": n["wants"], "fears": n["fears"], "values": n["values"]},
                "relationships": {pid: {"tie": n["tie"], "attitude": n["attitude"], "credit": [], "grievance": [], "believes_identity": "unknown"}},
                "knowledge": {"facts": {slug(k["key"]): k["fact"] for k in n.get("knows", [])}, "channels": ["what they see and hear"]},

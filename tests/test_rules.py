@@ -363,3 +363,36 @@ def test_usage_die_steps_down_on_a_low_roll_and_exhausts(monkeypatch):
 def test_the_ai_cannot_write_supplies_directly():
     w = world("ashfall_hunter")
     assert w.commit([{"op": "set", "path": "player.resources.first_aid_supplies.usage_die", "value": "d12"}])
+
+
+def test_work_source_check_comes_round_every_pace_and_is_the_programs():
+    from localgm.state import WriteRefused
+    w = world()
+    w.tree["npcs"]["fixer"] = {"name": "Pike Rourke", "state": {"position": "x", "status": "at the bar", "work_source": "3 days"}}
+    w2 = World(w.tree)
+    ws = w2.tree["npcs"]["fixer"]["work_source"]
+    assert ws["every_days"] == 3
+    due = [d for d in w2.tree["npcs"]["fixer"]["plan"]["dues"] if d.get("work")][0]
+    w2.tree["world_state"]["time"]["day_index"] = due["day"]
+    w2.tree["world_state"]["time"]["clock_minutes"] = 600
+    assert ("npcs.fixer", due) in w2.due()
+    w2.clear_due("npcs.fixer", due)
+    nxt = [d for d in w2.tree["npcs"]["fixer"]["plan"]["dues"] if d.get("work")][0]
+    assert nxt["day"] == due["day"] + 3
+    with pytest.raises(WriteRefused):
+        w2.apply({"op": "set", "path": "npcs.fixer.work_source.every_days", "value": 1})
+
+
+def test_new_actor_temper_is_rolled_once_by_the_program():
+    import random
+    before = {"npcs": {"a": {"name": "A"}}}
+    after = {"npcs": {"a": {"name": "A"}, "b": {"name": "Bo Kern", "state": {"status": "drinking"}}}}
+    lines, facts = rules.temper_new(before, after, random.Random(1))
+    assert after["npcs"]["b"]["temper"] in ("difficult", "ordinary") and len(lines) == 1 and "temper" not in after["npcs"]["a"]
+    again, _ = rules.temper_new(before, after)
+    assert again == []                       # never rerolled
+    hard = {"npcs": {"c": {"name": "Cy", "state": {"status": "hostile"}}}}
+    class Fixed:
+        def randint(self, a, b): return 8        # 2d10 = 16: ordinary for a stranger (needs 17), difficult for an opponent (needs 15)
+    rules.temper_new({}, hard, Fixed())
+    assert hard["npcs"]["c"]["temper"] == "difficult"

@@ -1,7 +1,7 @@
 """V5 rules that need world state, not just arithmetic: capability, rest, growth, quests, entitlement, endings,
 hidden truth. Each function takes a World, changes it only through its own methods, and returns facts."""
 from __future__ import annotations
-import re
+import json, re
 
 from . import mechanics as M
 from .state import World
@@ -737,3 +737,26 @@ def op_faults(w: World, ops: list[dict], resolved: dict[str, dict], governs: dic
         if op.get("op") != "remove" and KNOWLEDGE_PATH.match(path) and not str(op.get("channel", "")).strip():
             out.append(f"{tag}: someone learns something; say how (channel: witnessed, report, told by ...)")
     return out
+
+
+HOSTILE_WORDS = ("hostile", "enemy", "fighting", "aggress", "threat", "hunting the player")
+
+
+def temper_new(before: dict, after: dict, rng=None) -> tuple[list[str], list[str]]:
+    """A new actor who is not from the BACKGROUND is rolled once for temper (V5 §13.1): 2d10 >= 17 (>= 15 on the
+    opposing side) makes them a difficult character fitting their role. The roll is the program's; the result is kept."""
+    lines, facts = [], []
+    for nid, rec in (after.get("npcs") or {}).items():
+        if nid in (before.get("npcs") or {}) or not isinstance(rec, dict) or "temper" in rec:
+            continue
+        text = json.dumps([rec.get("state"), rec.get("relationships")], ensure_ascii=False).lower()
+        opposing = any(w in text for w in HOSTILE_WORDS)
+        need = 15 if opposing else 17
+        d = M.roll(2, 10, rng)
+        hard = sum(d) >= need
+        rec["temper"] = "difficult" if hard else "ordinary"
+        lines.append(f"temper of {rec.get('name', nid)} 2d10: {d[0]}+{d[1]} = {sum(d)} (needs {need}) → {rec['temper']}")
+        if hard:
+            facts.append(f"{rec.get('name', nid)} is a difficult character, fitting their role (rude, greedy, petty, a bully…); keep it. "
+                         "Never aim it at the player's secrets; their attitude still comes from the meeting.")
+    return lines, facts

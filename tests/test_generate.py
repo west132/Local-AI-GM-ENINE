@@ -96,3 +96,17 @@ def test_original_world_needs_no_source_abilities():
             return super().ask(system, user, schema, max_tokens)
     text, _ = G.generate(Orig(), "an original idea")
     assert background_tree(text)["setting"]["mode"] == "original"
+
+
+def test_a_work_source_gets_its_check_and_it_survives_a_replan():
+    g = copy.deepcopy(CAST); g["npcs"][0]["work_source"] = "weekly"
+    class W(Forms):
+        def ask(self, system, user, schema=None, max_tokens=None):
+            return copy.deepcopy(g) if k_in(schema, "npcs") else super().ask(system, user, schema, max_tokens)
+    text, _ = G.generate(W(), "x")
+    w = World(background_tree(text))
+    due = [d for d in w.tree["npcs"]["mara_voss"]["plan"]["dues"] if d.get("work")]
+    assert due and due[0]["day"] == 7
+    w.tree["npcs"]["mara_voss"]["plan"] = {"move": "x", "dues": [], "triggers": []}       # a replan that loses it
+    w.ensure_work()
+    assert any(d.get("work") for d in w.tree["npcs"]["mara_voss"]["plan"]["dues"])

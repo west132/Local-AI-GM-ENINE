@@ -512,6 +512,9 @@ def h_commit(turn: Turn, out: dict):
         facts += rules.quest_xp(trial, w.tree)
     if faults:
         raise M.RuleError("nothing was recorded. Fix:\n- " + "\n- ".join(faults))
+    tl, tf = rules.temper_new(w.tree, trial.tree)
+    lines += tl
+    facts += tf
     days = trial.time["day_index"] - w.time["day_index"]
     w.tree = trial.tree
     turn.fills = new_fills
@@ -565,10 +568,12 @@ def h_commit_ops(turn: Turn, out: dict):
     if faults:
         raise M.RuleError("nothing was recorded. Fix:\n- " + "\n- ".join(faults))
     xp = rules.quest_xp(trial, w.tree)
+    tl, tf = rules.temper_new(w.tree, trial.tree)
     w.tree = trial.tree
     _record_lines(turn, out["ops"])
     _events(turn, out["ops"])
-    turn.facts += xp
+    turn.facts += xp + tf
+    turn.lines += tl
 
 
 def h_record_injury(turn: Turn, out: dict):

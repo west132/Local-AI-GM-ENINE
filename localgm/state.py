@@ -15,7 +15,7 @@ OWNED = (r"round", r"world_state\.time", r"player\.condition\.(hp|mp)", r"player
          r"player\.resources", r"player\.progression", r"player\.skills\.[^.]+\.(class|tier|growth_evidence|ceiling_evidence)",
          r"trackers", r"journal", r"pending", r"player\.item_points", r"player\.growth_period",
          r"ending_conditions", r"ending_state", r"resolved",
-         r"npcs\.[^.]+\.capability\.(tracked|overall_level|xp)")
+         r"npcs\.[^.]+\.capability\.(tracked|overall_level|xp)", r"(npcs|factions)\.[^.]+\.(work_source|temper)")
 _OWNED = [re.compile(p + r"(\.|$)") for p in OWNED]
 
 
@@ -82,6 +82,22 @@ def at_minutes(at: str) -> int:
     raise ValueError(f"time {at!r}: use HH:MM or one of {sorted(AT_WORDS)}")
 
 
+WORK_WHAT = ("WORK SOURCE: did fitting work come in for the player? Ask it: YES it contacts the player · "
+             "NO, BUT thin, or it went to a rival · NO, AND a dry spell")
+
+
+def _every_days(v) -> int:
+    """'weekly' | 'daily' | 'monthly' | '3 days' | 3 | {pace: ...} -> whole days (default weekly)."""
+    if isinstance(v, dict):
+        v = v.get("pace") or v.get("every_days") or "weekly"
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return max(1, int(v))
+    m = re.search(r"(\d+)\s*(day|week|month)", str(v), re.I)
+    if m:
+        return max(1, int(m.group(1)) * {"day": 1, "week": 7, "month": 30}[m.group(2).lower()])
+    return {"daily": 1, "weekly": 7, "monthly": 30, "fortnightly": 14}.get(str(v).strip().lower(), 7)
+
+
 def _normalize_plans(tree: dict) -> None:
     """BACKGROUND writes an actor's plan as state.plan + state.due (free text). Make one plan record:
     {move, dues:[{day, clock, what}], triggers:[text]}. A single plain ISO due is converted here; anything
@@ -90,6 +106,9 @@ def _normalize_plans(tree: dict) -> None:
     for kind in ("npcs", "factions"):
         for rec in (tree.get(kind) or {}).values():
             st = rec.get("state") if isinstance(rec, dict) else None
+            if isinstance(st, dict) and "work_source" in st:        # a role that routes work to the player (V5 §13.1 WORK SOURCE)
+                every = _every_days(st.pop("work_source"))
+                rec["work_source"] = {"every_days": every, "next": {"day": t["day_index"] + every, "clock": 540}}
             if not isinstance(st, dict) or "plan" not in st or isinstance(st["plan"], dict):
                 continue
             plan = {"move": st.pop("plan"), "dues": [], "triggers": []}
@@ -110,6 +129,7 @@ class World:
         self.tree = tree
         self.round = round_no
         _normalize_plans(tree)
+        self.ensure_work()
         p = tree.get("player") or {}
         if (tree.get("enabled_modules") or {}).get("flexible_item_entitlement") and "item_points" not in p:
             p["item_points"] = int((p.get("starting_item_points") or {}).get("points", 0))
@@ -149,6 +169,7 @@ class World:
         if faults:
             return faults
         self.tree = trial.tree
+        self.ensure_work()
         return []
 
     RECORDS = ("npcs", "factions", "locations", "quests", "active_world_pressures", "development_threads",
@@ -277,6 +298,25 @@ class World:
         plan = self.get(path + ".plan")
         if plan and entry in plan["dues"]:
             plan["dues"].remove(entry)
+        ws = self.get(path + ".work_source")
+        if ws and entry.get("work"):                 # the program sets the next check; a replan cannot lose it
+            day = entry["day"] + ws["every_days"]
+            if day <= self.time["day_index"]:
+                day = self.time["day_index"] + ws["every_days"]
+            ws["next"] = {"day": day, "clock": entry["clock"]}
+            self.ensure_work(path)
+
+    def ensure_work(self, only: str | None = None) -> None:
+        """Every work source always has its next check on the books, whatever the AI did to the plan."""
+        for kind in ("npcs", "factions"):
+            for rid, rec in (self.tree.get(kind) or {}).items():
+                path = f"{kind}.{rid}"
+                ws = rec.get("work_source") if isinstance(rec, dict) else None
+                if not ws or (only and only != path) or "dead" in str((rec.get("state") or {}).get("status", "")).lower():
+                    continue
+                plan = rec.setdefault("plan", {"move": "routes work to the player", "dues": [], "triggers": []})
+                if not any(d.get("work") for d in plan["dues"]):
+                    plan["dues"].append({**ws["next"], "what": WORK_WHAT, "work": True})
 
     def tick_clock(self, path: str, operated: bool, extra: bool = False) -> dict:
         """The AI judged whether the process operated; the program fills the segments and sets the next check."""
