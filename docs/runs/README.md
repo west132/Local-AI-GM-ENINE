@@ -70,7 +70,12 @@ working on input 8, so it covers inputs 1–7 (attempts 1–7 of the log). Nothi
 
 What the data shows, no more:
 - 4 of the 7 attempted inputs were accepted by the program (rounds R1–R4); 3 were refused and rolled back whole (`ok: false`), each because the sort step
-  returned text that was not valid JSON. A refused round changes nothing, so the game stayed consistent, but the 3B model could not carry a turn
+  returned text that was not valid JSON. **"Accepted" does not mean good:** the accepted rounds are wrong. In R1 and R3 the sort step answered `confirm`
+  with nothing pending, which skips every step, so none of the background was applied. R1's story is the player's input repeated back; R3 has Nadia (the
+  client) ask "Who are you?", the player answer "I'm here to find my brother", and Nadia call the player a thief. The program let both through.
+  After this was pointed out it now refuses `confirm` with nothing pending and refuses a telling that repeats the player's words
+  (`test_confirm_with_nothing_pending_is_refused`, `test_a_telling_that_just_repeats…`). It cannot detect a narrator who has the roles backwards; that
+  needs a stronger model or the audit step doing its job, and the 3B's audit passed it. A refused round changes nothing, so the game stayed consistent, but the 3B model could not carry a turn
   reliably.
 - It is slow on CPU: 7–12 minutes per attempted input.
 - The header shows time stuck at 19:40 after four accepted rounds: the model did not advance the clock.

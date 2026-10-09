@@ -241,6 +241,9 @@ def addressed(world: World, text: str) -> list[str]:
 
 
 def h_route(turn: Turn, out: dict):
+    if out["kind"] == "confirm" and not turn.pending:     # nothing was offered: a "confirm" would skip every step and the world would not be told
+        raise M.RuleError("nothing is waiting for the player's confirmation, so kind 'confirm' is wrong. Sort what the player does: "
+                          "fast, loop, retrieval or continuation (name the steps whose trigger fired)")
     # Someone else is affected (section 6) whenever the player names a person who is here: that is never a fast action.
     if addressed(turn.world, turn.text) and out["kind"] in ("fast", "retrieval", "continuation") and "react" not in out["steps"]:
         out = {**out, "kind": "loop", "steps": out["steps"] + ["react"]}
@@ -627,6 +630,9 @@ def clean(prose: str) -> str:
 
 def h_show(turn: Turn, out: str):
     prose = clean(out)
+    echo = re.sub(r"\W+", " ", turn.text).strip().lower()
+    if len(echo) >= 25 and echo in re.sub(r"\W+", " ", prose).lower():
+        raise M.RuleError("your text repeats the player's own words. Tell what happens as a result: what the world and the people in it do")
     known = turn.text + " " + " ".join(turn.results + turn.facts)
     terms = rules.secret_terms(turn.world, known)
     bad = rules.leaks(prose, terms)

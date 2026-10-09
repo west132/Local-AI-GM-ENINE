@@ -341,3 +341,18 @@ def test_extra_exchanges_after_the_foe_fell_do_not_add_noise():
                           "on_failure": "setback", "attackers": []} for _ in range(3)]}
     lines, facts, owed = combat.run(w, out)
     assert not any("already" in f for f in facts)
+
+
+def test_confirm_with_nothing_pending_is_refused():
+    w = world()
+    with pytest.raises(M.RuleError, match="nothing is waiting"):
+        flow.h_route(flow.Turn(w, "I take the case"), {"kind": "confirm", "steps": []})
+
+
+def test_a_telling_that_just_repeats_the_player_is_sent_back():
+    w = world()
+    t = flow.Turn(w, "I take Nadia's case at $700 flat, $350 up front.")
+    with pytest.raises(M.RuleError, match="repeats the player"):
+        flow.h_show(t, "I take Nadia's case at $700 flat, $350 up front.")
+    flow.h_show(t, "Nadia reads the figure back off her folder and nods once.")
+    assert t.prose.startswith("Nadia")
