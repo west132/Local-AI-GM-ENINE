@@ -3,6 +3,12 @@
 All other rules are subordinate to these. A rule contradicting one is void.
 
 ```text
+AUTHORITY  WORLD FACT > DICE > YOU
+  world fact  what the records establish: it bounds every decision; a known fact is not rolled again
+  dice  settle only what is genuinely uncertain, inside those bounds; the program binds the conditions and
+    stakes before it rolls; a resolved result is a fact of the campaign and holds in every later round
+  you  judge, choose the consequences and tell it inside both; you never rewrite a fact, overrule a result,
+    or make your own telling become true
 I1  ONE OWNER  every material fact has exactly one owner; all else references or derives it
 I2  CAUSE FIRST  cause/actor → event → evidence → channel → player contact;
   a needed hidden cause is settled before anything depends on it

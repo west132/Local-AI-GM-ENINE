@@ -61,17 +61,22 @@ turn:
   - id: judge
     when: "'judge' in sort.steps"
     rules: [04_truth, 07_possible, 08_roll_setup, 09_stakes]
-    input: [player_text, place, player_state, records_in_play]
+    input: [player_text, place, player_state, records_in_play, resolved_facts]
     output:
       type: object
-      required: [verdict]
+      required: [verdict, cites]
       properties:
         verdict:  {type: string, enum: [certain, impossible, roll]}
         reason:   {type: string}
+        cites:    {type: array, items: {type: string}, description: "record paths this verdict rests on; they must exist"}
+        uncertain: {type: string, description: "for a roll: what exactly remains open"}
         roll:
           type: object
-          required: [capability, base, stakes]
+          required: [subject, capability, base, stakes]
           properties:
+            subject:    {type: string, description: "the thing being attempted, in a few words, e.g. pick_lock:cellar_door"}
+            changed:    {type: string, description: "if this subject was rolled before: what is materially different now"}
+            governs:    {type: array, items: {type: string}, description: "record paths this result decides"}
             capability: {type: integer, enum: [-4, -2, 0, 2, 4]}
             base:       {type: integer, minimum: 1, maximum: 20}
             conditions: {type: object, description: "environment|time|sensory|position|simultaneous: -1,0,1,2"}
@@ -135,7 +140,7 @@ turn:
   - id: wonder
     when: "'react' in sort.steps"
     rules: [11_actors]
-    input: [place, actors_present, dues_fired, player_text, results_so_far]
+    input: [place, actors_present, dues_fired, player_text, results_so_far, resolved_facts]
     output:
       type: object
       required: [asks]
@@ -150,13 +155,16 @@ turn:
               likelihood: {type: integer, minimum: -3, maximum: 3}
               for:        {type: string}
               against:    {type: string}
+              cites:      {type: array, items: {type: string}, description: "record paths behind the question; they must exist"}
+              governs:    {type: array, items: {type: string}, description: "record paths the answer decides"}
+              changed:    {type: string, description: "if this question was answered before: what is materially new"}
     program: ask_roll
 
   # C: the AI is told the results and says what follows from them. D: the program validates and commits, all or nothing.
   - id: react
     when: "'react' in sort.steps"
     rules: [11_actors, 12_world]
-    input: [place, actors_present, dues_fired, pressures, player_text, results_so_far]
+    input: [place, actors_present, dues_fired, pressures, player_text, results_so_far, resolved_facts]
     output:
       type: object
       required: [minutes, ops]
@@ -173,6 +181,9 @@ turn:
               path:  {type: string}
               value: {}
               due_in_minutes: {type: integer, minimum: 0}
+              requires: {type: object, description: "REQUIRED for any path a result governs: {on: the question or subject, answer: YES|NO|SUCCESS|FAILURE}", properties: {on: {type: string}, answer: {type: string, enum: ["YES", "NO", "SUCCESS", "FAILURE"]}}}
+              because:  {type: string, description: "the cause, in a few words"}
+              channel:  {type: string, description: "REQUIRED when the change is something a person or faction learns: how they learned it (witnessed, report, told by ...)"}
         money:  {type: integer, description: "the player's cash change: negative = spent, positive = received"}
         rest:   {type: string, enum: [none, rest, sleep], description: "rest = the time was spent resting; sleep = a full night's sleep"}
         boundary: {type: string, enum: [none, training, aftermath], description: "a growth boundary: dedicated training or downtime, or the settled aftermath of a resolved arc (sleep counts by itself)"}

@@ -6,6 +6,9 @@ Status of each V5 rule in the running program. A line here is true only if a tes
 
 | V5 part | Status | Where / test |
 |---|---|---|
+| Authority order world fact > dice > AI (`docs/DESIGN.md`): cited records must exist; resolved rolls/answers are frozen in a ledger and not rerolled unless something material changed; a change to a path a result decides must declare and match that result; reversing it later needs a cause | implemented | `tests/test_authority.py` |
+| Someone learning something needs a channel; every change is journaled with cause/channel/requires | implemented | `test_someone_learning_something…` |
+| Established records cannot lose entries (relationships, knowledge, drives, history, fields); plan, injury, equipment, skill shapes are checked | implemented | `test_established_records_cannot…`; the hostile-model fuzz (60 rounds on each of the 5 worlds) checks it with an independent oracle, and fails if the check is switched off |
 | Dice, check, odds, ask, XP, growth, HP, damage, time | implemented | `mechanics.py`; identical to the V5 helper on ~10k compared cases: `python tools/compare_v5.py <path to engine_math_v5_0.py>` |
 | Roll, then consequence (AI told the result before it writes outcomes) | implemented | step order in `steps.yaml`; `test_the_ai_sees_the_ask_result…` |
 | One workflow definition (`steps.yaml` runs the turn; handlers are a registry) | implemented | `test_the_yaml_is_the_whole_workflow` |
@@ -38,4 +41,5 @@ Status of each V5 rule in the running program. A line here is true only if a tes
 | Sorting floor: naming a person who is here is never a fast action | implemented | `test_naming_a_person…` |
 | Open-question rules (yes/no, likelihood needs a fact) | implemented | `test_wh_question…` |
 | Fights (exchanges, damage, soak, down/dead) | partial | `combat.py`; morale and per-attacker budgets are the AI's judgement |
+| Whether a consequence is sensible inside a result's bounds; whether a cited record really supports a verdict | AI judgement | visible in the journal |
 | Real-model play over a long campaign | not tested | only a 3B coding model has been run, for a few turns |

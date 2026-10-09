@@ -200,7 +200,7 @@ def endings_world():
 def test_a_met_ending_ends_the_scenario_and_conditions_cannot_be_rewritten():
     w = endings_world()
     assert w.commit([{"op": "set", "path": "ending_conditions.core_conditions", "value": []}])
-    llm = Scripted([{"kind": "loop", "steps": ["judge"]}, {"verdict": "certain"}, {"met": ["core.0"], "closed": []}, "Done.", OK])
+    llm = Scripted([{"kind": "loop", "steps": ["judge"]}, {"verdict": "certain", "cites": ["player"]}, {"met": ["core.0"], "closed": []}, "Done.", OK])
     t = flow.run_turn(w, llm, "I hand Tobias the envelope")
     assert any("ENDING REACHED" in f for f in t.facts) and w.tree["ending_state"]["met"] == "core.0"
     with pytest.raises(flow.ScenarioEnded):
@@ -237,7 +237,7 @@ def test_secret_names_are_found_and_a_leaking_story_is_sent_back_then_cut():
 
 def test_records_of_hidden_things_are_not_handed_to_the_narrator():
     w = hidden_world()
-    ops = [{"op": "set", "path": "npcs.hobb_marren.drives.wants", "value": ["Ostrava's silence"]},
+    ops = [{"op": "append", "path": "npcs.hobb_marren.drives.wants", "value": "Ostrava's silence"},
            {"op": "set", "path": "npcs.hobb_marren.state.mood", "value": "tense"}]
     t, llm = run_react(w, ops=ops)
     told = llm.seen[-2][1]                                    # the telling step's prompt
@@ -258,10 +258,10 @@ def test_max_mp_and_the_cost_of_a_cast_are_paid_even_when_the_cast_fails(monkeyp
 def test_a_cast_without_enough_mp_or_an_unknown_power_goes_back_to_the_ai():
     w = world("ashfall_hunter")
     w.player["condition"]["mp"] = 5
-    llm = Scripted([LOOP_JUDGE, roll_form(cast="demonic_surge"), {"verdict": "impossible", "reason": "no power left"}, "ok", OK])
+    llm = Scripted([LOOP_JUDGE, roll_form(cast="demonic_surge"), {"verdict": "impossible", "cites": ["player.condition"], "reason": "no power left"}, "ok", OK])
     flow.run_turn(w, llm, "surge")
     assert "costs 6 MP" in llm.seen[2][1] and w.player["condition"]["mp"] == 5
-    llm = Scripted([LOOP_JUDGE, roll_form(cast="fireball"), {"verdict": "impossible", "reason": "no such power"}, "ok", OK])
+    llm = Scripted([LOOP_JUDGE, roll_form(cast="fireball"), {"verdict": "impossible", "cites": ["player.condition"], "reason": "no such power"}, "ok", OK])
     flow.run_turn(w, llm, "fireball")
     assert "not an MP-drawing power" in llm.seen[2][1]
 

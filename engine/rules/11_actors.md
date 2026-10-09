@@ -28,6 +28,11 @@ STANCE  on meeting or being asked, derive it from: the existing relationship, wa
 Open questions:
 
 ```text
+CITE/GOVERNS  an open question may cite the records behind it (cites) and list the record paths its answer decides
+  (governs). A question already answered and unchanged is not asked again (changed says what is new).
+```
+
+```text
 WHEN  the player's own ask (a request, approach, offer, question to an actor; what a place or source holds
   now: goods, work, news, help), or an actor's replan or work-source check, when the record does not settle
   it and it matters. Everything else is decided, not rolled: actors from state, norms, canon; fights by the

@@ -55,6 +55,9 @@ class Turn:
         self.injury_owed = 0            # lasting injuries the player must be given (named by the AI, recorded by the program)
         self.shape = None               # SHORT | LONG | CHAIN when a new offer's shape was rolled this turn
         self.hidden: list[str] = []     # records changed that the narrator must not be told about
+        self.resolved: dict[str, dict] = {}   # results of this turn, by normalised key: {positive, label}
+        self.governs: dict[str, str] = {}     # record path -> the result that decides it
+        self.events: list[dict] = []          # what changed, why, and by what channel (goes to the journal)
 
     def module(self, name: str) -> bool:
         return rules.module(self.world, name)
@@ -136,6 +139,8 @@ def inputs(step: dict, turn: Turn) -> str:
             qs = [f"{q}: {r.get('objective', '')[:140]} [{r.get('status', '')}]" for q, r in (w.tree.get("quests") or {}).items()
                   if isinstance(r, dict)]
             parts.append("QUESTS:\n" + ("\n".join(qs) or "none"))
+        elif name == "resolved_facts":
+            parts.append("ALREADY RESOLVED IN THIS CAMPAIGN (binding; not rolled again unless something material changed):\n" + rules.ledger_text(w))
         elif name == "results_so_far":
             parts.append("RESULTS (decided by the program; what you record must agree with them):\n" + ("\n".join(turn.results + turn.facts) or "none"))
         elif name == "facts_from_program":
@@ -213,7 +218,16 @@ def h_route(turn: Turn, out: dict):
         turn.facts.append("The earlier risky action was dropped; nothing was rolled.")
 
 
+def _bind(turn: Turn, key: str, e: dict, governs: list[str]) -> None:
+    turn.resolved[key] = {"positive": e["positive"], "label": e["outcome"]}
+    for g in governs or e.get("governs") or []:
+        turn.governs[g] = key
+
+
 def h_roll(turn: Turn, out: dict):
+    rules.check_cites(turn.world, out.get("cites", []))
+    if out["verdict"] in ("impossible", "certain") and not out.get("cites"):
+        raise M.RuleError("an impossible or certain verdict must cite the records that settle it (cites)")
     if out["verdict"] == "impossible":
         turn.facts.append(f"IMPOSSIBLE: {out.get('reason', '')}")
         return
@@ -223,6 +237,13 @@ def h_roll(turn: Turn, out: dict):
     if not r:
         raise M.RuleError("verdict 'roll' needs a roll form")
     st = r["stakes"]
+    key = rules.norm(r["subject"])
+    prev = rules.frozen(turn.world, key)
+    if prev and not str(r.get("changed", "")).strip():
+        # an unchanged repeat is not rolled again (I10): the earlier result stands
+        _bind(turn, key, prev, r.get("governs"))
+        turn.results.append(f"RESULT {prev['outcome']} (already resolved in round {prev['round']}; nothing was rolled again): {prev['text']}")
+        return
     if st.get("harm", "none") in ("loss", "severe") and st.get("source") not in combat.DAMAGE:
         raise M.RuleError(f"harm '{st.get('harm')}' needs stakes.source from {sorted(combat.DAMAGE)}")
     if r.get("cast"):
@@ -258,7 +279,10 @@ def _resolve(turn: Turn, r: dict) -> None:
     if notes:
         turn.lines.append("Gear: " + "; ".join(notes))
     win = res["success"]
-    turn.results.append(f"RESULT roll {'SUCCESS' if win else 'FAILURE'}: {st['success'] if win else st['failure']}")
+    text = st["success"] if win else st["failure"]
+    turn.results.append(f"RESULT roll {'SUCCESS' if win else 'FAILURE'}: {text}")
+    key = rules.norm(r["subject"])
+    _bind(turn, key, rules.record_result(w, key, "roll", "SUCCESS" if win else "FAILURE", win, text, r.get("governs", [])), r.get("governs"))
     skill = r.get("skill")
     if skill and skill in (w.player.get("skills") or {}):
         gain = w.credit_skill(skill, win, diff, r.get("challenge"))
@@ -305,16 +329,33 @@ def ask_problem(a: dict) -> str | None:
 
 
 def h_ask_roll(turn: Turn, out: dict):
+    w = turn.world
     bad = [p for p in map(ask_problem, out["asks"]) if p]
+    for a in out["asks"]:
+        try:
+            rules.check_cites(w, a.get("cites", []))
+        except M.RuleError as e:
+            bad.append(str(e))
     if bad and not turn.final:
         raise M.RuleError("\n- " + "\n- ".join(bad))
     for a in out["asks"]:
         if ask_problem(a):
             continue                          # refused twice: not rolled, not recorded
+        try:
+            rules.check_cites(w, a.get("cites", []))
+        except M.RuleError:
+            continue
+        key = rules.norm(a["question"])
+        prev = rules.frozen(w, key)
+        if prev and not str(a.get("changed", "")).strip():
+            _bind(turn, key, prev, a.get("governs"))
+            turn.results.append(f"RESULT question '{a['question']}' → {prev['outcome']} (already answered in round {prev['round']}; not asked again)")
+            continue
         r = M.ask(a["likelihood"])
         d1, d2 = r["dice"]
         turn.lines.append(f"ask 2d10: {d1}+{d2} {r['likelihood']:+d} = {r['total']} → {r['band']} ({a['question']})")
         turn.results.append(f"RESULT question '{a['question']}' → {r['band']}")
+        _bind(turn, key, rules.record_result(w, key, "ask", r["band"], r["band"].startswith("YES"), a["question"], a.get("governs", [])), a.get("governs"))
 
 
 def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], facts: list[str], lines: list[str]) -> list[str]:
@@ -368,7 +409,8 @@ def h_commit(turn: Turn, out: dict):
     """D: validate everything on a copy; commit all of it or none of it."""
     w, new_fills, facts, lines = turn.world, [], [], []
     trial = w.clone()
-    faults = trial.commit(out["ops"])
+    faults = rules.op_faults(w, out["ops"], turn.resolved, turn.governs)
+    faults += trial.commit(out["ops"])
     faults += _typed_changes(trial, turn, out, new_fills, facts, lines)
     minutes = int(out["minutes"]) if turn.dues_pass == 1 else 0
     if not faults:
@@ -389,6 +431,7 @@ def h_commit(turn: Turn, out: dict):
     for p, d in turn.dues:
         w.clear_due(p, d)
     _record_lines(turn, out["ops"])
+    _events(turn, out["ops"])
     turn.facts += facts
     turn.lines += lines
     if out.get("money"):
@@ -414,10 +457,18 @@ def h_shape_roll(turn: Turn, out: dict):
     turn.results.append("RESULT " + line + ". Write the new quest with exactly this shape.")
 
 
+def _events(turn: Turn, ops: list[dict]) -> None:
+    for op in ops:
+        e = {"round": turn.world.round + 1, "change": f"{op['op']} {op['path']}", "because": op.get("because", ""),
+             "requires": op.get("requires"), "channel": op.get("channel", ""), "action": turn.text}
+        turn.events.append({k: v for k, v in e.items() if v})
+
+
 def h_commit_ops(turn: Turn, out: dict):
     w = turn.world
     trial = w.clone()
-    faults = trial.commit(out["ops"])
+    faults = rules.op_faults(w, out["ops"], turn.resolved, turn.governs)
+    faults += trial.commit(out["ops"])
     if not faults and turn.shape:
         new = [q for q in (trial.tree.get("quests") or {}) if q not in (w.tree.get("quests") or {})]
         if not new:
@@ -429,6 +480,7 @@ def h_commit_ops(turn: Turn, out: dict):
     xp = rules.quest_xp(trial, w.tree)
     w.tree = trial.tree
     _record_lines(turn, out["ops"])
+    _events(turn, out["ops"])
     turn.facts += xp
 
 

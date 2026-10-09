@@ -294,7 +294,7 @@ class H(BaseHTTPRequestHandler):
         def run():
             t = flow.run_turn(g.world, APP.model(), text)
             hdr = header(g.world)
-            g.log({"input": text, "sort": t.sort, "lines": t.lines, "facts": t.facts, "prose": t.prose, "header": hdr})
+            g.log({"input": text, "sort": t.sort, "lines": t.lines, "facts": t.facts, "events": t.events, "prose": t.prose, "header": hdr})
             g.save()
             return {"html": turn_html(text, t.lines + [f"Cash: {' '.join(str(x) for x in g.world.cash() if x != '')}"], t.prose, hdr), "header": hdr}
         if not APP.start(name, "turn", run):

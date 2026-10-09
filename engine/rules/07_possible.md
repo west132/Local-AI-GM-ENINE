@@ -1,6 +1,16 @@
 ## 7. Is it possible?
 
 ```text
+CITE  every verdict names the records it rests on (cites: record paths such as npcs.hobb_marren.state.status).
+  certain / impossible: cite what settles it. roll: cite what bounds it, and say in `uncertain` what remains open.
+  A path that does not exist is refused. Nothing is settled by something the records do not hold.
+SUBJECT  a roll names its subject in a few words (e.g. pick_lock:cellar_door). The same subject is not rolled again
+  while nothing material has changed: the earlier result stands. If something did change, say what in `changed`.
+GOVERNS  list the record paths the result decides (governs). Any change you later record to those paths must say
+  which result it depends on (requires) and agree with it.
+```
+
+```text
 violates established reality  → IMPOSSIBLE
 far beyond plausible capability/support  → IMPOSSIBLE
 a knowledge gate blocks required knowledge  → LIMITED or IMPOSSIBLE at that depth

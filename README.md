@@ -13,6 +13,7 @@ A local AI model decides what is possible, what the people in the world do, and 
 4. On **Home**, make a new game from a bundled world or paste your own BACKGROUND, and play. Every page has Home and Settings links; **Go back to this round** rewinds a game.
 
 ## How it works
+The order is fixed: **world fact > dice > AI** (see `docs/DESIGN.md`).
 `engine/steps.yaml` is the turn, in the form the program executes: each step says what the AI sees, the form it must fill in, and what the program does with it.
 `engine/rules/` holds the judgement rules each step loads. `docs/MAP_FROM_V5.md` shows where each part of NEW ENGINE v5.0 went.
 `python tools/ui_check.py` clicks through the app in a real browser. `python -m pytest tests` runs the rest.

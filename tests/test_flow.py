@@ -28,9 +28,14 @@ LOOP_REACT = {"kind": "loop", "steps": ["react"]}
 LOOP_JUDGE = {"kind": "loop", "steps": ["judge"]}
 
 
+_N = [0]
+
+
 def roll_form(**kw):
     stakes = {"success": "it works", "failure": "it fails", "harm": "none", **kw.pop("stakes", {})}
-    return {"verdict": "roll", "roll": {"capability": 0, "base": 10, "stakes": stakes, **kw}}
+    _N[0] += 1
+    cites = kw.pop("cites", [])
+    return {"verdict": "roll", "cites": cites, "roll": {"subject": kw.pop("subject", f"attempt {_N[0]}"), "capability": 0, "base": 10, "stakes": stakes, **kw}}
 
 
 def force_check(monkeypatch, success: bool):

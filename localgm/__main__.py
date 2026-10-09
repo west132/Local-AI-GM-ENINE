@@ -46,7 +46,7 @@ def main(argv=None):
             game.rewind(int(text.split()[1])); print(header(game.world)); continue
         print(f"> {text}")
         turn = flow.run_turn(game.world, ai, text)
-        game.log({"input": text, "sort": turn.sort, "lines": turn.lines, "facts": turn.facts, "prose": turn.prose})
+        game.log({"input": text, "sort": turn.sort, "lines": turn.lines, "facts": turn.facts, "events": turn.events, "prose": turn.prose})
         game.save()
         print(show(turn), "\n")
 

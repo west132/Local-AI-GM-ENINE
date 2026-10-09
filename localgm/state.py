@@ -14,7 +14,7 @@ from . import clock, mechanics as M
 OWNED = (r"round", r"world_state\.time", r"player\.condition\.(hp|mp)", r"player\.money",
          r"player\.resources", r"player\.progression", r"player\.skills\.[^.]+\.(class|tier|growth_evidence|ceiling_evidence)",
          r"trackers", r"journal", r"pending", r"player\.item_points", r"player\.growth_period",
-         r"ending_conditions", r"ending_state")
+         r"ending_conditions", r"ending_state", r"resolved")
 _OWNED = [re.compile(p + r"(\.|$)") for p in OWNED]
 
 
@@ -181,6 +181,7 @@ class World:
         if before.player.get("identity") != self.player.get("identity"):
             out.append("player.identity cannot change")
         from . import rules
+        out += rules.record_faults(before.tree, self.tree)
         out += rules.quest_faults(before.tree, self.tree, bool((self.tree.get("enabled_modules") or {}).get("numeric_level_xp")))
         return out
 

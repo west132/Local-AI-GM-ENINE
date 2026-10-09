@@ -480,3 +480,205 @@ def resupply(w: World, rid: str, die: str | None, count: int | None) -> str:
             raise M.RuleError(f"a resupply must raise the die above {res.get('usage_die')}: one of {DIE}")
         res["usage_die"] = die
     return f"{res['name']} resupplied."
+
+
+# ---------- persistent records: nothing established may be lost (I1, I7) ----------
+
+# subtrees that only grow: values may change, but keys and list items are never dropped
+GROWS = [re.compile(x) for x in (
+    r"^(npcs|factions)\.[^.]+\.(relationships|drives|knowledge|discovered_information)$",
+    r"^world_state\.material_history$",
+    r"^locked_case_truths\.[^.]+\.(prior_events|evidence|discovered_information)$",
+    r"^active_world_pressures\.[^.]+\.discovered_information$",
+    r"^player\.knowledge$")]
+
+
+def _lost(before, after, path: str, out: list[str]) -> None:
+    if isinstance(before, dict):
+        if not isinstance(after, dict):
+            out.append(f"{path} stopped being an object")
+            return
+        for k, v in before.items():
+            if k not in after:
+                out.append(f"{path}.{k} was dropped")
+            else:
+                _lost(v, after[k], f"{path}.{k}", out)
+    elif isinstance(before, list):
+        if not isinstance(after, list) or len(after) < len(before):
+            out.append(f"{path} lost entries")
+
+
+def _paths(tree: dict, pat) -> list[tuple[str, object]]:
+    out = []
+    for top in ("npcs", "factions", "locked_case_truths", "active_world_pressures"):
+        for rid, rec in (tree.get(top) or {}).items():
+            if isinstance(rec, dict):
+                for k, v in rec.items():
+                    if pat.match(f"{top}.{rid}.{k}"):
+                        out.append((f"{top}.{rid}.{k}", v))
+    for fixed in ("world_state.material_history", "player.knowledge"):
+        node = tree
+        for part in fixed.split("."):
+            node = node.get(part) if isinstance(node, dict) else None
+        if node is not None and pat.match(fixed):
+            out.append((fixed, node))
+    return out
+
+
+def _ids(tree: dict) -> set[str]:
+    ids = set(tree.get("npcs") or {}) | set(tree.get("factions") or {})
+    name = ((tree.get("player") or {}).get("identity") or {}).get("name")
+    if name:
+        ids.add(re.sub(r"\W+", "_", str(name).lower()).strip("_"))
+    return ids
+
+
+def player_faults(after: dict) -> list[str]:
+    """The player's own record: strict where the program does arithmetic on it."""
+    p, out = after.get("player") or {}, []
+    cond = p.get("condition") or {}
+    if not isinstance(cond, dict):
+        return ["player.condition must stay an object"]
+    inj = cond.get("injuries", [])
+    if not isinstance(inj, list) or any(not (isinstance(i, dict) and isinstance(i.get("injury"), str) and i.get("home") in HOMES
+                                             and str(i.get("effect", "")).strip()) for i in inj):
+        out.append(f"player.condition.injuries: each is {{injury, home (one of {HOMES}), effect}}")
+    eq = p.get("equipment", [])
+    if not isinstance(eq, list) or any(not (isinstance(e, dict) and str(e.get("name", "")).strip()) for e in eq):
+        out.append("player.equipment: each item is an object with a name")
+    skills = p.get("skills", {})
+    if not isinstance(skills, dict):
+        return out + ["player.skills must stay an object"]
+    for sid, s in skills.items():
+        if not (isinstance(s, dict) and s.get("class") in M.CEILING and s.get("tier") in M.TIERS
+                and M.TIERS.index(s["tier"]) <= M.TIERS.index(M.CEILING[s["class"]])
+                and isinstance(s.get("growth_evidence", 0), int) and isinstance(s.get("ceiling_evidence", 0), int)):
+            out.append(f"player.skills.{sid}: needs a valid class, a tier within its ceiling and whole-number evidence")
+    for key, kind in (("routines", dict), ("fighting_style", list), ("knowledge", dict)):
+        if key in p and not isinstance(p[key], kind):
+            out.append(f"player.{key} must stay a {kind.__name__}")
+    if "money" in p and not isinstance(p["money"], (int, dict)):
+        out.append("player.money must stay a number or a record")
+    return out
+
+
+def record_faults(before: dict, after: dict) -> list[str]:
+    """Whole-world checks run on every commit: established facts survive, shapes hold, references resolve."""
+    out = []
+    for pat in GROWS:
+        old = dict(_paths(before, pat))
+        new = dict(_paths(after, pat))
+        for path, v in old.items():
+            if path not in new:
+                out.append(f"{path} was removed")
+            else:
+                _lost(v, new[path], path, out)
+    for kind in ("npcs", "factions", "locations", "quests", "active_world_pressures", "development_threads", "rights_obligations"):
+        for rid, rec in (before.get(kind) or {}).items():
+            if isinstance(rec, dict):
+                gone = [k for k in rec if k not in ((after.get(kind) or {}).get(rid) or {})]
+                if gone:
+                    out.append(f"{kind}.{rid} lost fields {gone}")
+    for kind in ("npcs", "factions"):
+        for rid, rec in (after.get(kind) or {}).items():
+            if not isinstance(rec, dict):
+                continue
+            if "name" in rec and not str(rec["name"]).strip():
+                out.append(f"{kind}.{rid}.name is empty")
+            plan = rec.get("plan")
+            if plan is not None:
+                ok = isinstance(plan, dict) and isinstance(plan.get("dues"), list) and isinstance(plan.get("triggers"), list) \
+                    and all(isinstance(d, dict) and {"day", "clock", "what"} <= set(d) for d in plan.get("dues", []))
+                if not ok:
+                    out.append(f"{kind}.{rid}.plan must keep its shape {{move, dues:[{{day, clock, what}}], triggers:[...]}}; use the plan op")
+    out += player_faults(after)
+    old_ids, new_ids = _ids(before), _ids(after)
+    for kind in ("npcs", "factions"):
+        for rid, rec in (after.get(kind) or {}).items():
+            was = set(((before.get(kind) or {}).get(rid) or {}).get("relationships") or {})
+            for other in (rec.get("relationships") or {}) if isinstance(rec, dict) else {}:
+                if other not in was and other not in new_ids:
+                    out.append(f"{kind}.{rid}.relationships.{other}: nobody here has that id")
+    for qid, q in (after.get("quests") or {}).items():
+        was = set(((before.get("quests") or {}).get(qid) or {}).get("participants") or [])
+        for pid in (q.get("participants") or []) if isinstance(q, dict) else []:
+            if pid not in was and pid not in new_ids:
+                out.append(f"quests.{qid}.participants: {pid} is not a known person")
+    return out
+
+
+# ---------- authority: world fact > dice > AI ----------
+
+def norm(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(text).lower()).strip()
+
+
+def get_path(tree: dict, path: str):
+    node = tree
+    for part in path.split("."):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            return None
+    return node
+
+
+def check_cites(w: World, cites: list[str]) -> None:
+    """A verdict rests on records that exist. Nothing is settled by something the records do not hold."""
+    missing = [c for c in cites if get_path(w.tree, c) is None]
+    if missing:
+        raise M.RuleError(f"these cited records do not exist: {missing}. Cite paths that are in the records, or do not rely on them.")
+
+
+def frozen(w: World, key: str) -> dict | None:
+    for e in reversed(w.tree.get("resolved") or []):
+        if e["key"] == key:
+            return e
+    return None
+
+
+def record_result(w: World, key: str, kind: str, label: str, positive: bool, text: str, governs: list[str]) -> dict:
+    """A resolved roll or answer becomes a fact of the campaign; later rounds respect it."""
+    e = {"round": w.round + 1, "key": key, "kind": kind, "outcome": label, "positive": positive, "text": text, "governs": list(governs)}
+    w.tree.setdefault("resolved", []).append(e)
+    return e
+
+
+def ledger_text(w: World, n: int = 12) -> str:
+    rows = (w.tree.get("resolved") or [])[-n:]
+    return "\n".join(f"R{e['round']} {e['kind']} '{e['key']}': {e['outcome']} — {e['text']}" for e in rows) or "none yet"
+
+
+def past_governed(w: World) -> dict[str, dict]:
+    out = {}
+    for e in w.tree.get("resolved") or []:
+        for g in e.get("governs") or []:
+            out[g] = e
+    return out
+
+
+KNOWLEDGE_PATH = re.compile(r"^((npcs|factions)\.[^.]+\.knowledge|player\.knowledge)\b")
+
+
+def op_faults(w: World, ops: list[dict], resolved: dict[str, dict], governs: dict[str, str]) -> list[str]:
+    """Do the proposed changes agree with the results of this turn, and have they a cause and a channel?"""
+    out, old = [], past_governed(w)
+    for i, op in enumerate(ops, 1):
+        path, req = op.get("path", ""), op.get("requires")
+        tag = f"op {i} ({path})"
+        hit = [k for g, k in governs.items() if path == g or path.startswith(g + ".") or g.startswith(path + ".")]
+        if hit and not req:
+            out.append(f"{tag}: this path is decided by the result of {hit[0]!r}; say which answer it depends on (requires)")
+        if req:
+            key = norm(req.get("on", ""))
+            r = resolved.get(key)
+            if r is None:
+                out.append(f"{tag}: requires {req.get('on')!r}, but nothing with that name was resolved this turn: {sorted(resolved) or 'nothing'}")
+            elif (req.get("answer") in ("YES", "SUCCESS")) != r["positive"]:
+                out.append(f"{tag}: depends on {req.get('answer')} but the result was {r['label']}; that change cannot be recorded")
+        prior = next((e for g, e in old.items() if path == g or path.startswith(g + ".")), None)
+        if prior and not req and not str(op.get("because", "")).strip():
+            out.append(f"{tag}: this was decided by {prior['key']!r} in round {prior['round']} ({prior['outcome']}); changing it needs a new cause (because) or a new result (requires)")
+        if op.get("op") != "remove" and KNOWLEDGE_PATH.match(path) and not str(op.get("channel", "")).strip():
+            out.append(f"{tag}: someone learns something; say how (channel: witnessed, report, told by ...)")
+    return out
