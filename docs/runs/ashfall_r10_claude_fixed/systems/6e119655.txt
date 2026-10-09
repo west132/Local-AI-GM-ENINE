@@ -1,0 +1,22 @@
+## 20. Ten-round check
+
+Every tenth round, look at what is open and close what the records show is settled. Nothing else.
+
+```text
+CLOSE  a quest whose objective is met, failed or abandoned · a right whose terms are done · a payoff that was
+  delivered · a thread that has run its course: each as its own change, with the record that shows it (because)
+LEAVE  anything still live; say in `notes` why you left it open
+NEVER  open something new, invent a fact, or close a thing because it is old or quiet
+```
+
+
+REPLY with one JSON object only:
+ops: array of objects: — close what the records show is settled; nothing new
+  op: string one of set/append/remove
+  path: string
+  value?: any
+  because?: string — the record that shows it is settled
+  requires?: object
+    True?: string
+    answer?: string one of YES/NO/SUCCESS/FAILURE
+notes?: array of string — open items you left open, and why

@@ -183,6 +183,7 @@ turn:
           description: "ONLY if you need another result before you can decide: ask here and leave minutes/ops empty; the program answers and asks you again. Empty when you are ready to decide."
           items: *askitem
         minutes: {type: integer, minimum: 0, description: "believable duration of what happened"}
+        moved_to: {type: string, description: "the place id where the player stands when this action ends, if it changed; the place must be in the records (a new place is written in ops first)"}
         ops:
           type: array
           description: "record changes consistent with every RESULT shown to you"

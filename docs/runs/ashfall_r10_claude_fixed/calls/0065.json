@@ -1,0 +1,17 @@
+{
+ "n": 65,
+ "system_id": "6e119655",
+ "user": "OPEN ITEMS:\nquest ash_beneath [available]: Find out what happened to Eli Voss and who is sending crews below the Red Line.\nquest laundromat_job [active]: Clear whatever is in the Suds & Spin basement; $400 via Pike.\nright laundromat_deal: {\"type\": \"brokered job\", \"parties\": [\"rin_hale\", \"pike_adeyemi\", \"suds_and_spin_owner\"], \"state\": {\"work\": \"clear whatever is in the Suds & Spin basement\", \"fee\": \"$400 paid on completion\", \"broker_cut\": \"Pike takes 15%\", \"start\": \"Rin goes tomorrow morning, 2\nright clinic_promise: {\"type\": \"promise\", \"parties\": [\"rin_hale\", \"nadia_voss\", \"eli_voss\"], \"state\": {\"terms\": \"Rin takes Eli to a no-questions clinic tomorrow, 2026-10-07\", \"cost\": \"Nadia pays the bill\", \"status\": \"open\"}}\n\nALREADY RESOLVED IN THIS CAMPAIGN (binding; not rolled again unless something material changed):\nR1 settled 'does nadia show rin the family plan phone locator': YES (settled) — Does Nadia show Rin the family-plan phone locator?\nR2 settled 'is the suds spin basement job still open when rin phones pike to take it': YES (settled) — Is the Suds & Spin basement job still open when Rin phones Pike to take it?\nR4 ask 'does eli open the door of hut 3 to rin': NO, BUT — Does Eli open the door of hut 3 to Rin?\nR5 ask 'does eli open the door of hut 3 and let rin see the shard': YES — Does Eli open the door of hut 3 and let Rin see the shard?\nR6 settled 'does eli agree to leave hut 3 and go to hale workshop with rin': YES (settled) — Does Eli agree to leave hut 3 and go to Hale Workshop with Rin?\nR7 settled 'does eli let rin try to sense the shard through the containers while he holds them': YES (settled) — Does Eli let Rin try to sense the shard through the containers while he holds them?\nR7 roll 'sense the shard s resonance through plastic cardboard glass and a steel tin': SUCCESS — Rin gets a usable reading of the shard's resonance even through the tin\nR7 ask 'does eli let rin leave the shard in the steel tin on the shelf instead of keeping it on him': YES, AND — Does Eli let Rin leave the shard in the steel tin on the shelf instead of keeping it on him?\nR8 settled 'does nadia come to hale workshop at once when rin calls to say eli is safe': YES (settled) — Does Nadia come to Hale Workshop at once when Rin calls to say Eli is safe?\nR8 settled 'does nadia pay rin the contracted 500 balance in cash when she sees eli safe': YES (settled) — Does Nadia pay Rin the contracted $500 balance in cash when she sees Eli safe?\nR9 settled 'does eli agree to stay the night on rin s sofa': YES (settled) — Does Eli agree to stay the night on Rin's sofa?\nR9 ask 'does nadia agree to go home and leave eli at the workshop on rin s promise of a clinic tomorrow': YES, AND — Does Nadia agree to go home and leave Eli at the workshop on Rin's promise of a clinic tomorrow?",
+ "reply": {
+  "ops": [],
+  "notes": [
+   "ash_beneath: the case behind Eli's disappearance is still open; nobody has been below the Red Line",
+   "laundromat_job and laundromat_deal: Rin goes this morning; not done",
+   "clinic_promise: the clinic visit is today; not done"
+  ]
+ },
+ "error": null,
+ "secs": 8.2,
+ "max_tokens": null,
+ "wants": "json"
+}

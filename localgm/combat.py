@@ -33,6 +33,7 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str], int]:
     lines, facts, owed = [], [], 0
     lv0 = rules.level(world)
     downed = []
+    down_before = {n for n in world.tree.get("npcs", {}) if world.state_of(n) != "standing"}
     for i, ex in enumerate(out["exchanges"], 1):
         if world.player_state() != "standing":
             facts.append(f"The player is {world.player_state()}; the remaining exchanges did not happen.")
@@ -41,7 +42,8 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str], int]:
         if foe not in world.tree.get("npcs", {}):
             raise M.RuleError(f"exchange {i}: unknown foe {foe!r}")
         if world.state_of(foe) != "standing":
-            facts.append(f"{foe} is already {world.state_of(foe)}.")
+            if foe in down_before:                       # exchanges listed after the foe fell are skipped quietly
+                facts.append(f"{foe} is already {world.state_of(foe)}.")
             continue
         r = ex["roll"]
         foe_rec = world.tree["npcs"][foe]

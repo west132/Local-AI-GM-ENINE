@@ -145,3 +145,9 @@ LIMIT  it supplies no actor, opportunity, or resource (I3, I5); none who knows a
 CLOSE  it advances only by its own valid transitions; completed or abandoned is recognised at the next
   growth moment
 ```
+
+```text
+MOVE  the player ends the action in another place → say which in `moved_to` (a place id in the records; a place first entered
+  gets its own locations record with a challenge band, written in ops first). The program moves the player; the place the
+  next step shows is the one you named. Forgetting it leaves the player standing where they started.
+```

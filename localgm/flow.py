@@ -419,6 +419,13 @@ def h_ask_roll(turn: Turn, out: dict):
 def _typed_changes(trial: World, turn: Turn, out: dict, new_fills: list[str], facts: list[str], lines: list[str]) -> list[str]:
     """Money, clocks, rest, growth, item points: the AI states what happened, the program does the rest."""
     faults = []
+    if out.get("moved_to"):                  # where the player stands when the action ends; the place must be in the records
+        dest = str(out["moved_to"]).strip()
+        if dest not in (trial.tree.get("locations") or {}):
+            faults.append(f"moved_to {dest!r} is not a place in the records ({sorted(trial.tree.get('locations') or {})}); "
+                          "a place first entered gets a locations record with its challenge band, written in ops")
+        else:
+            trial.tree["world_state"]["location"] = dest
     if out.get("money"):
         try:
             trial.pay(int(out["money"]))

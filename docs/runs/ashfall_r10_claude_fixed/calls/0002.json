@@ -1,0 +1,71 @@
+{
+ "n": 2,
+ "system_id": "3888ebdb",
+ "user": "\n\nTODAY: 2026-10-06 at 19:40 (day_offset 0)\n\nnpcs.dale: move=\"do what Rusk pays for and keep the side job concealed; during an inspection follow Rusk's public story unless contradictory evidence or personal risk breaks it\" | note=\"2026-10-07 00:30 on Rusk's scheduled freight run; immediately if discovered or contacted by the actual boss\"\nnpcs.vic: move=\"keep working while he needs the money and look for an excuse to quit; during an inspection follow Rusk's public story unless contradictory evidence or personal risk breaks it\" | note=\"2026-10-07 00:30 on Rusk's scheduled freight run; immediately if discovered or contacted by the actual boss\"\nnpcs.orin_sable: move=\"confirm the next residue consignment through Rusk and Gallo. If credible losses, a hunter inquiry or route obstruction reaches him, verify what happened and offer Jo a legitimate-looking paid retrieval via a normal contact; she may refuse or expose him. If 7-B shuts, test Mercer logistics or seek a substitute buyer or contractor without assuming success. Orin cannot know Rin's parentage without evidence.\" | note='2026-10-07 noon for stock and payer reports; immediately if Gallo, Rusk or courier reports a credible interruption'\nnpcs.the_surveyor: move='send its small bound runner to check the pre-existing narrow bleed-drain when water falls; reassess the thinned seal from below at the next two-week inspection even if Orin loses its human crews. If residue extraction is stopped, slower cyclic stress remains until the seam is repaired or stabilized; the Surveyor may try to exploit it from its accessible side, needing time and usable contact. A sealer-line resonance, when actually sensed, prompts a separate investigation through real Orin/Court channels, not automatic identification or an immediate encounter.' | note='2026-10-08 04:00 low-water runner report, then each low-water window (mercer_pump.low_water); next physical seam assessment 2026-10-20, or sooner on observed supply stop or valid resonance'",
+ "reply": {
+  "actors": [
+   {
+    "id": "npcs.dale",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "00:30",
+      "what": "on Rusk's scheduled freight run"
+     }
+    ],
+    "triggers": [
+     "immediately if discovered or contacted by the actual boss"
+    ]
+   },
+   {
+    "id": "npcs.vic",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "00:30",
+      "what": "on Rusk's scheduled freight run"
+     }
+    ],
+    "triggers": [
+     "immediately if discovered or contacted by the actual boss"
+    ]
+   },
+   {
+    "id": "npcs.orin_sable",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "12:00",
+      "what": "stock and payer reports"
+     }
+    ],
+    "triggers": [
+     "immediately if Gallo, Rusk or a courier reports a credible interruption"
+    ]
+   },
+   {
+    "id": "npcs.the_surveyor",
+    "dues": [
+     {
+      "day_offset": 2,
+      "at": "04:00",
+      "what": "low-water runner report"
+     },
+     {
+      "day_offset": 14,
+      "at": "morning",
+      "what": "next physical seam assessment (2026-10-20)"
+     }
+    ],
+    "triggers": [
+     "each low-water window (mercer_pump.low_water)",
+     "sooner on observed supply stop or a valid resonance"
+    ]
+   }
+  ]
+ },
+ "error": null,
+ "secs": 4.7,
+ "max_tokens": null,
+ "wants": "json"
+}

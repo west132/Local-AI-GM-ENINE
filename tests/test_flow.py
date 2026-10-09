@@ -321,3 +321,23 @@ def test_naming_a_person_who_is_here_is_never_a_fast_action():
     w2 = world()
     t = flow.run_turn(w2, Scripted([FAST, "You sit.", OK]), "I sit down")
     assert "react" not in t.ran
+
+
+def test_the_player_is_moved_by_the_program_when_the_ai_says_where_they_end_up():
+    w = world()
+    w.tree["locations"]["yard"] = {"name": "Yard", "conditions": {}, "challenge_band": {"min": 1, "max": 3, "basis": "x"}}
+    turn = flow.Turn(w, "go to the yard")
+    flow.h_commit(turn, {"minutes": 10, "ops": [], "moved_to": "yard"})
+    assert w.tree["world_state"]["location"] == "yard"
+    with pytest.raises(M.RuleError, match="not a place"):
+        flow.h_commit(flow.Turn(w, "x"), {"minutes": 1, "ops": [], "moved_to": "the moon"})
+    assert w.tree["world_state"]["location"] == "yard"
+
+
+def test_extra_exchanges_after_the_foe_fell_do_not_add_noise():
+    w = world()
+    out = {"foes": [{"id": "rat", "name": "rat", "v": 1, "size": "small"}], "stop": "x", "kill": True,
+           "exchanges": [{"foe": "rat", "roll": {"capability": 4, "base": 18, "skill": None}, "on_success": "full", "my_source": "unarmed",
+                          "on_failure": "setback", "attackers": []} for _ in range(3)]}
+    lines, facts, owed = combat.run(w, out)
+    assert not any("already" in f for f in facts)

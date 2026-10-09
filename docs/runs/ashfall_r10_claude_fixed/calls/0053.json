@@ -1,0 +1,19 @@
+{
+ "n": 53,
+ "system_id": "6f95f91e",
+ "user": "PLAYER: I call Nadia in, tell her Eli is safe, and take the $350 balance in cash.\n\nQUESTS:\nash_beneath: Find out what happened to Eli Voss and who is sending crews below the Red Line. [available]\nfind_eli_voss: Find Eli Voss and get him somewhere safe. [active]\nlaundromat_job: Clear whatever is in the Suds & Spin basement; $400 via Pike. [active]\n\nRESULTS (decided by the program; what you record must agree with them):\nRESULT question 'Does Nadia come to Hale Workshop at once when Rin calls to say Eli is safe?' → YES (settled): finding Eli is her first want and she asked Rin for exactly this call\nRESULT question 'Does Nadia pay Rin the contracted $500 balance in cash when she sees Eli safe?' → YES (settled): the contract says $500 when Eli is put in front of her, and she pays her debts to the cent\nRECORDED set npcs.nadia_voss.state.position \"hale_workshop\"\nRECORDED set npcs.nadia_voss.state.status \"at Hale Workshop with Eli, relieved and angry in equal parts; has paid Rin the balance\"\nRECORDED set rights_obligations.voss_trace.state {\"service\": \"trace Eli Voss\", \"fee\": \"$700 in all\", \"paid\": \"$200 deposit 2026-10-06 and $500 balance 2026-10-06 in cash\", \"status\": \"completed: Eli found and p\nRECORDED plan npcs.nadia_voss \"stay with Eli until it is settled where he sleeps tonight, then go home\"\nRECORDED cash +500",
+ "reply": {
+  "ops": [
+   {
+    "op": "set",
+    "path": "quests.find_eli_voss.status",
+    "value": "completed",
+    "because": "Eli was found, brought to Hale Workshop and put in front of Nadia, safe for the night"
+   }
+  ]
+ },
+ "error": null,
+ "secs": 8.2,
+ "max_tokens": null,
+ "wants": "json"
+}

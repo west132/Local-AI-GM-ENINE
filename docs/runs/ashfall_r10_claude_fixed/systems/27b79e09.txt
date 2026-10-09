@@ -1,0 +1,124 @@
+## 10. Fights
+
+```text
+PLAN  the player gives a target or objective and how to fight; fight orders + fighting style are the plan
+LOOP  WHILE the fight is active AND the plan covers the next exchange: resolve it by the plan
+YOU  resolve attacks, defence, movement, position, skills, enemy action, injury, morale, environment;
+  an uncertain exchange → a roll (sections 7–8) before narration; a deterministic one → no roll
+EXCHANGE  one roll for the player's side; the engaged opponent is the Challenge
+  success → the bound reach, no cost; failure → the bound cost, HP where there is harm
+  the opposition's attacks ARE that cost, never separate rolls against the player
+  other opponents are one fact: one execution condition OR a higher cost, never both, never extra rolls (I8)
+  an enemy acting against an ally or bystander → its own resolution
+ATTACKS  per exchange, per opponent, as its body and weapons allow: a man-sized fighter 1; a creature 1 per
+  independent weapon (a dragon: bite or claw + tail or wing; breath when established); reach limits
+  targets; a sweep or breath = one attack hitting each target in the area
+  the player's roll resolves first and pays its bound cost; every other attack (an ally's failed roll,
+  anyone else) spends one from what remains
+  a failure with no attack left or out of reach → a setback, not harm (I8)
+ORDERS  a fight order holds until the fight ends, carried out as said when its condition occurs,
+  without stopping; a stated habit is a fighting style
+UNCOVERED case → sections 7–8, never an invented mechanic
+STOP ONLY  objective done or impossible · the player is down (0 HP) or incapacitated · something the
+  orders and fighting style do not cover (an unforeseen enemy or threat, a tactic that no longer works,
+  an ally in danger needing the player's choice, a limited resource needed outside the cover)
+```
+
+```text
+MORALE  combatants have their own survival; to the death is a specific choice, not the default
+SOURCE  the setting's norms (setting_anchors.norms) → the actor's drives, obligations, discipline, knowledge (I5)
+CHECK  each time the fight turns against a side: one of its own falls or is badly hurt · its leader falls ·
+  it is surprised or plainly outmatched · retreat is threatened · staying costs more than it gains
+SETTLED  never rolled; with no established reason to hold (cornered, guarding young or lair, fanatic, undead,
+  bound, a leader feared more than the enemy) the losing side withdraws or breaks; if it cannot safely
+  surrender it runs if it can; surrender only from a break and only where survivable; it holds until the
+  situation materially changes; it is not re-decided every exchange
+press on  the objective or obligation still outweighs the cost      withdraw  disengages under its own power
+surrender  yields instead of running, where survivable                break  cohesion fails; flight, panic
+AFTER  withdrawn or surrendered enemies remain actors with memory, allies, a future
+ENVIRONMENT  causally active: it can block, break, spread, attract attention, open options
+```
+
+
+## 19. Lessons from play
+
+Each line was added after a model got something wrong in play. Taken from AI_RULES v5.0 (the lines about judging and playing; the tool, save and language lines are the program's or are in section 15).
+
+```text
+DICE  decide what any local would know: shops, cafés, job ads, a desk taking calls, workers chatting on a break;
+  dice only where the outcome could honestly go either way for that actor
+OBVIOUS  before an open question, write the obvious answer (the `obvious` field); if one exists, it stands and
+  nothing is rolled; never roll to avoid being the one who said yes; never search for one more fact on either side
+WORLD  ordinary, not hostile: difficulty comes from real opposition (an actor with a reason, a real hazard),
+  never from scenery, staff, or availability
+NEUTRAL  a new relationship starts neutral, never cold; a neutral stranger is civil and an ordinary professional
+  does their job; neutral is not nice: a character made difficult stays difficult
+ORDINARY STEPS  the player's character does the ordinary competent steps of their trade unasked
+CONTINUE  "continue", "go on", "go" or "wait" carries on under the current order; it never grants new permission to
+  spend a resource, change tactic, or take a new risk
+NO DRAMA STOPS  never stop for drama or confirmation during routine continuation; in a fight never stop while the
+  plan covers the next exchange: not per strike, not for a wound, not for low HP the plan already answers; do not
+  confirm trivial steps, turn every event into a quest, or every quiet moment into exposition
+BIND  the player's words bind as said ("one by one", "from range"); speaking, signalling, calling for an item or
+  giving an order does not by itself move the character, turn them, lower their guard, or leave cover
+COMBAT  never invent a combat subsystem: no extra hit counts, damage tables or severity rolls after a result; a
+  tougher opponent is its Challenge and HP; crippling and capture come only from a severe cost bound before the dice
+CANON  when unsure what canon says, search rather than guess
+```
+
+```text
+FAST vs LOOP
+  your own cake, at home          → FAST: eaten
+  a lord's cake at his feast      → someone cares → LOOP
+  a cake already made poisoned    → a committed cause applies → LOOP
+  eating while the dragon circles → risky → LOOP
+open questions
+  settled  a sworn bodyguard → comes along; no question to the player
+  settled  a captain ordered to finish fast, believing a rebel → the block
+  open     "any work up north?" at a guild table → roll; likelihood from the setting and the source, never from what
+           the player needs
+```
+
+What each rule forbids, as seen in play:
+
+```text
+I1  two copies of the same mutable fact
+I2  inventing a cause backward from a clue the player already found
+I3  facts created because the player's plan needs them
+I4  writing the player's belief, feeling, trust or acceptance as fact; allies obeying because they are allies
+I5  NPCs acting on GM omniscience; reporting off-screen events with no channel
+I6  railroading, and equally: softening the world because anti-railroading was mistaken for gentleness
+I7  rebuilding counters, XP, inventory or rewards from prose; double application; silent loss
+I8  the same impairment in two channels; the same value paid twice; challenge counted in both Challenge and Difficulty
+I9  narration revealing causes, awarding resources, resolving quests, moving actors, creating obligations
+I10 hidden rerolls, adjusted results, lowered difficulty to manufacture possibility, faked dice
+I11 compensation prizes; failure quietly rewritten as partial success
+I12 inventing values to pass validation; rebuilding lost state from narration
+```
+
+
+REPLY with one JSON object only:
+foes?: array of objects: — opponents not yet in the records; the program adds them
+  id: string
+  name: string
+  v: integer — its level for HP
+  size: string one of small/normal/large/huge
+exchanges: array of objects: — the exchanges the player's orders and style cover, in order
+  foe: string — id of the engaged opponent
+  roll: object
+    capability: integer one of -4/-2/0/2/4
+    base: integer
+    conditions?: object
+    tool?: object
+    skill?: string
+    equipment?: string
+    challenge?: integer
+  on_success: string one of partial/full/decisive
+  my_source: string — damage source of the player's blow
+  on_failure: string one of setback/loss/severe
+  attackers: array of objects: — who can hit the player on a failure
+    who: string
+    source: string
+  soak?: integer
+kill?: boolean — true if the player's order is to kill: a foe that goes down is then finished at once, without a roll
+stop?: string — why the orders no longer cover the next exchange, if so

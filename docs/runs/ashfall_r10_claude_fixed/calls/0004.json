@@ -1,0 +1,65 @@
+{
+ "n": 4,
+ "system_id": "3888ebdb",
+ "user": "\n\nTODAY: 2026-10-06 at 19:40 (day_offset 0)\n\nnpcs.ada_hale: move='keep Rin away from the Red Line; tell Rin about 2004 only if Rin is in real danger from it' | note='2026-10-11 18:00 usual Sunday call to Rin; immediately on a verified threat reaching her through a real channel'\nnpcs.mrs_okafor: move='keep the block in order; feed Rin when she thinks Rin looks thin' | note='2026-10-07 08:00 normal building round; immediately on a real tenant or property emergency'\nnpcs.gallo_pawnbroker: move='sell remaining under-counter charm stock selectively, hide batches from attention and alert Orin if a courier or hunter exposes the supply. He keeps rough cash/batch notes, not an exhaustive list of every buyer, and fears his staff and shop becoming an occult incident site.' | note='2026-10-07 10:00 shop opening and batch check; immediately if questioned, raided or a customer turns visibly ill'\nnpcs.imran_dalen: move='keep taking fares despite symptoms; seek an ordinary clinic if he misses another full shift' | note='2026-10-07 05:30 next taxi shift; earlier if sickness, hazard or spouse makes him change plans'",
+ "reply": {
+  "actors": [
+   {
+    "id": "npcs.ada_hale",
+    "dues": [
+     {
+      "day_offset": 5,
+      "at": "18:00",
+      "what": "usual Sunday call to Rin"
+     }
+    ],
+    "triggers": [
+     "immediately on a verified threat reaching her through a real channel"
+    ]
+   },
+   {
+    "id": "npcs.mrs_okafor",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "08:00",
+      "what": "normal building round"
+     }
+    ],
+    "triggers": [
+     "immediately on a real tenant or property emergency"
+    ]
+   },
+   {
+    "id": "npcs.gallo_pawnbroker",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "10:00",
+      "what": "shop opening and batch check"
+     }
+    ],
+    "triggers": [
+     "immediately if questioned, raided or a customer turns visibly ill"
+    ]
+   },
+   {
+    "id": "npcs.imran_dalen",
+    "dues": [
+     {
+      "day_offset": 1,
+      "at": "05:30",
+      "what": "next taxi shift"
+     }
+    ],
+    "triggers": [
+     "earlier if sickness, hazard or his spouse makes him change plans"
+    ]
+   }
+  ]
+ },
+ "error": null,
+ "secs": 4.2,
+ "max_tokens": null,
+ "wants": "json"
+}

@@ -1,0 +1,12 @@
+{
+ "n": 11,
+ "system_id": "6f95f91e",
+ "user": "PLAYER: I take Nadia's case at $700 flat, $350 up front. I ask her to show me the phone locator and I keep Eli's map with the Red Spur circled.\n\nQUESTS:\nash_beneath: Find out what happened to Eli Voss and who is sending crews below the Red Line. [available]\nfind_eli_voss: Find Eli Voss and get him somewhere safe. [available]\nlaundromat_job: Clear whatever is in the Suds & Spin basement; $400 via Pike. [available]\n\nRESULTS (decided by the program; what you record must agree with them):\nRESULT question 'Does Nadia accept Rin's terms of $700 flat with $350 up front?' → NO, BUT\nRESULT question 'Does Nadia show Rin the family-plan phone locator?' → YES (settled): it is her own family plan, she has never checked it, and finding Eli is her first want\nRECORDED set npcs.nadia_voss.state.status \"counters Rin's terms: she will hire Rin, but only $200 up front and $500 when Eli is put in front of her, with an update every day; waiting for Rin's answer. T\nRECORDED set locked_case_truths.red_line_case.discovered_information.phone_location \"Rin saw the family-plan locator on Nadia's phone: Eli's phone last on the Canal Street embankment at 06:40 Oct 5, about 300 m accuracy (an area, not a building",
+ "reply": {
+  "ops": []
+ },
+ "error": null,
+ "secs": 4.2,
+ "max_tokens": null,
+ "wants": "json"
+}

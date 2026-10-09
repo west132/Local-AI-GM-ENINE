@@ -1,0 +1,13 @@
+{
+ "n": 31,
+ "system_id": "05de5aa6",
+ "user": "PLACE: Canal Street embankment relay huts — {\"character\": \"six padlocked brick relay huts on a disused rail embankment, weeds, a service road\"}\nWEATHER/ENVIRONMENT: {\"weather\": \"steady rain\", \"streets\": \"wet, moderate evening traffic\", \"transit\": \"minor Red Line delays\", \"workshop\": \"locked up for the night; Rin is out\", \"embankment\": \"disused rail embankment in steady rain: six padlocked brick relay huts, weeds, a service road\"}\nTIME: 2026-10-06 21:00, night\nPERSON eli_voss: {\"name\": \"Eli Voss\", \"job\": \"transit maintenance technician\", \"gender\": \"man\", \"character\": \"earnest train nerd, brave in a badly planned way, talks fast when scared, can't lie to his sister\", \"doing\": \"will talk through the shut door of hut 3 but will not open it for a stranger on a name alone; wants proof Rin really comes from Nadia\"}\nPERSON jonas_rusk: {\"name\": \"Jonas Rusk\", \"job\": \"Merrow night operations supervisor, Red Line contract\", \"gender\": \"man\", \"character\": \"neat, tired, polite on the phone and sweating off it; tells himself it's only paperwork\", \"doing\": \"runs the extended windows for Orin's cash; in over his head\"}\n\nTEXT TO CHECK:\nYou knock on the wedged steel door and say your name, and that Nadia Voss sent you to find her brother.\n\nFor a moment there is only the rain. Then a man's voice, low and hoarse, comes from just the other side of the brick. He's close to the door and not standing easily; you hear a sharp breath through the teeth when he shifts.\n\n\"Nadia didn't tell me anyone was coming.\" A pause. \"I heard what happened out there. That doesn't make you hers.\" The door doesn't move. \"I'm not opening this on a name. Tell me why I should.\"\n\nFACTS (tell exactly these):\nRESULT question 'Does Eli open the door of hut 3 to Rin?' → NO, BUT\nRECORDED set npcs.eli_voss.state.status \"will talk through the shut door of hut 3 but will not open it for a stranger on a name alone; wants proof Rin really comes from Nadia\"",
+ "reply": {
+  "ok": true,
+  "problems": []
+ },
+ "error": null,
+ "secs": 1.2,
+ "max_tokens": null,
+ "wants": "json"
+}

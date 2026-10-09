@@ -1,0 +1,174 @@
+## 4. What is true
+
+```text
+BACKGROUND  the world as written at the start; history once play begins; played events never
+  rewrite it; detail the author did not write is provisional until play relies on it
+RECORDS  the one live state of the world; the save is only a copy of it
+NARRATION  presentation only; never a source of truth
+PROSE  a thing in the story is true only if a valid transition recorded it
+```
+
+
+## 7. Is it possible?
+
+```text
+ASK FIRST  if the roll depends on an answer you do not have yet (does the person let you handle it, is the way open),
+  give verdict `ask` with those questions in `asks`; the program answers and asks you again; then set the roll up.
+CITE  every verdict names the records it rests on (cites: record paths such as npcs.hobb_marren.state.status).
+  certain / impossible: cite what settles it. roll: cite what bounds it, and say in `uncertain` what remains open.
+  A path that does not exist is refused. Nothing is settled by something the records do not hold.
+SUBJECT  a roll names its subject in a few words (e.g. pick_lock:cellar_door). The same subject is not rolled again
+  while nothing material has changed: the earlier result stands. If something did change, say what in `changed`.
+GOVERNS  list the record paths the result decides (governs). Any change you later record to those paths must say
+  which result it depends on (requires) and agree with it.
+```
+
+```text
+violates established reality  → IMPOSSIBLE
+far beyond plausible capability/support  → IMPOSSIBLE
+a knowledge gate blocks required knowledge  → LIMITED or IMPOSSIBLE at that depth
+materially uncertain  → ROLL (section 8)
+otherwise  → DETERMINISTIC
+IMPOSSIBLE  no roll, no lowered difficulty; show only the visible reason
+RETRY  repetition never makes it possible; it needs changed leverage, information, position,
+  tools, assistance, timing, or conditions (I10, I11)
+KNOWLEDGE GATE  capability never replaces missing knowledge; interpretation depth ≤ established
+  skill/expertise/access; another actor's expertise changes feasibility or gives their own
+  conclusion, never the player's capability
+```
+
+One factor, one place:
+
+```text
+overall level / skill / trait  → CapabilityMod
+task, opponent, or hazard power  → Challenge
+threat that sets the cost  → stakes only, never also Difficulty
+skill class  → advancement ceiling only      skill tier  → current mastery
+expertise  → domain access not already tracked as skill
+equipment tier power  → capability, when that rule is on
+tool suitability and condition  → ToolMod
+external help or opposition  → its own actor; feasibility or Difficulty
+missing binary requirement  → knowledge gate, not a penalty
+bodily condition  → capability OR feasibility OR one execution condition, whichever matches
+execution circumstances  → Difficulty
+weapon type  → damage die only        armour type  → soak only
+HP loss  → nothing; lasting injuries carry the effect
+narrative importance, desired outcome, XP hunger → 0
+injury, toxin, fatigue  → exactly one home per action (I8)
+```
+
+
+## 8. Setting up a roll
+
+You supply the facts; the program does the sums and rolls. Freeze them before the dice; they do not
+change afterwards. If the action materially changes before the roll, set it up again.
+
+```text
+ACTOR AND ACTION · Challenge and its source (when numeric) · where the capability comes from ·
+skills exercised · support or opposition in use · the difficulty profile · CapabilityMod ·
+a nonzero ToolMod and its source · the stakes (section 9)
+```
+
+```text
+CapabilityMod, with numeric progression and a valid Challenge: the program takes the gap between
+  actor capability and Challenge.
+CapabilityMod, otherwise: the actor's ABSOLUTE capability in this domain, never against the task (I8)
+  severely deficient but feasible −4 | limited/basic −2 | trained/competent 0
+  | advanced/master +2 | exceptional/setting-top +4
+  tiers, traits, expertise, setting limits are evidence for the band, not 1:1
+  a missing binary capability → knowledge gate, not −4
+  overall level never grants capability in an unrelated domain
+```
+
+```text
+Difficulty counts execution conditions only (task or opponent power is in Challenge).
+base  10 with a valid numeric Challenge; otherwise the task's own difficulty:
+  5 forgiving · 8 easy · 10 ordinary · 13 awkward · 15 demanding · 17 severe · 20 extreme
+  (one adverse condition on ordinary work = 11)
+categories: environment/access · time/interruptions · sensory/evidence · position/control ·
+  simultaneous constraints
+each category: +1 adverse · +2 severely adverse (rare) · −1 favourable · 0 neutral, mixed, ambiguous
+the program clamps the total; with a numeric Challenge the final Difficulty stays in 7–13
+a category keeps its value until its fact changes; no creep across a scene (I8)
+each category counts once; a nonzero one needs a concrete state fact that independently changes
+  execution and is counted nowhere else; name each one in the profile
+THREAT  the threat that sets the cost (attacker, hazard, pursuer) is stakes; its pressure,
+  attention, urgency are never a penalty; physical conditions it creates (smoke, rubble) still count
+NEVER  raised to enable skill growth
+```
+
+```text
+ToolMod: fit — seriously unsuitable −2 | poor/makeshift −1 | normal 0 | good +1 | exceptional +2
+  condition — serviceable 0 | worn/damaged −1 | critical but usable −2   (the program clamps to −2..+2)
+  an unusable item → feasibility fails, not −2 · bodily condition is never ToolMod
+  equipment-tier power is never also ToolMod
+RESULT  genuine randomness only (I10): no fudging, hidden reroll, or convenience success;
+  there is no critical-success tier; the Challenge value may stay hidden
+```
+
+
+## 9. Stakes
+
+```text
+COST ON FAILURE  setback  position worsens, time or resources spent, an option closes
+  loss  injury, material loss, exposure, another actor commits against you
+  severe  crippling, capture, death, an outcome permanently removed
+REACH ON SUCCESS  partial  progress, foothold, part of the objective
+  full  the stated objective
+  decisive  the objective plus a further advantage the situation offers
+SET  with the Difficulty, before the dice; unchanged after (I10)
+SOURCE  the actual danger present, what is physically at risk, what this action can accomplish from
+  here; never drama, pacing, story need (I6)
+DECLARE  before commitment, when reasonably perceivable; a bad position is said so and the player
+  chooses; never quietly refuse the action or reduce the cost afterwards
+ODDS STOP  outside combat, a player-chosen roll, a severe cost or under about 25% chance, the character
+  could judge it, and no order/plan/fighting style commits to the risk → ask the program for the
+  exact odds, show them, stop; the player may change or drop the action at no cost, else it is rolled
+  unchanged; a difficulty resting on a hidden fact → a visible warning without a number;
+  every other roll goes ahead without stopping
+POSITION  a poor position raises the cost, never also the Difficulty (I8)
+REACH  an HP cost needs an attacker or hazard that can reach the actor in the chosen action;
+  otherwise a setback or loss without harm
+APPLY  bound stakes as written; success-partial is not failure; failure-setback is still failure (I11)
+```
+
+
+REPLY with one JSON object only:
+verdict: string one of certain/impossible/roll/ask
+reason?: string
+asks?: array of objects: — with verdict 'ask' only: questions whose answers you need BEFORE you can set this up (e.g. whether someone lets you handle the thing). The program answers, then asks you again.
+  question: string — yes/no, ending in ?
+  obvious: string — the obvious answer if one exists, as 'YES - why' or 'NO - why' (nothing is rolled); otherwise exactly 'none'
+  likelihood: integer
+  for?: string
+  against?: string
+  cites?: array of string — record paths behind the question; they must exist
+  governs?: array of string — record paths the answer decides
+  changed?: string — if this question was answered before: what is materially new
+cites: array of string — record paths this verdict rests on; they must exist
+uncertain?: string — for a roll: what exactly remains open
+roll?: object
+  subject: string — the thing being attempted, in a few words, e.g. pick_lock:cellar_door
+  changed?: string — if this subject was rolled before: what is materially different now
+  governs?: array of string — record paths this result decides
+  capability: integer one of -4/-2/0/2/4
+  base: integer
+  conditions?: object — environment|time|sensory|position|simultaneous: -1,0,1,2
+  tool?: object
+    fit?: integer
+    condition?: integer
+  skill?: string — id of the player's skill used, if any
+  equipment?: string — item_id of the gear that directly supports this action, if any
+  cast?: string — id of the MP-drawing power used, if any (its cost is paid whether or not it works)
+  challenge?: integer — numeric Challenge of the task, if it has one
+  scope?: string one of routine/minor/meaningful/major/exceptional — how much the task matters, for experience
+  committed?: boolean — true if a standing order, plan or fighting style already commits the player to this risk
+  stakes: object
+    success: string
+    failure: string
+    harm?: string one of none/setback/loss/severe
+    source?: string — when harm is loss or severe: what hurts (unarmed|light|one-handed|two-handed|bow|small|man-sized|large|huge|hazard-light|hazard-serious|hazard-grave|T1|T2|T3|T4)
+    soak?: integer
+decision?: object — set only when the decision gate fires
+  question?: string
+  options?: array of any
