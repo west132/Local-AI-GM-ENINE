@@ -15,7 +15,7 @@ Turn the V5 text engine (written for web chat) into installable local software w
   clocks, dues, saves; commits all-or-nothing on a copy; freezes resolved results in a ledger so they are not rerolled.
 - Backends: LM Studio / Ollama (OpenAI-style), an in-process .gguf, and a Demo that needs no model. A Windows-style app (Home, Settings, Play,
   rewind, Export/Import save, Make a new world, Check this model) writes `settings.json` itself.
-- 27 rule files, 144 tests, a browser check, an install check, a flow audit (`tools/audit_flows.py`).
+- 27 rule files, 165 tests, a browser check, an install check, a flow audit (`tools/audit_flows.py`). Install and run steps: `README.md`, `docs/INSTALL.md`.
 
 ## 3. What we went through
 1. **Port** the V5 turn into an executable form; mechanics checked against V5's helper (`tools/compare_v5.py`).
@@ -62,3 +62,11 @@ Found and fixed:
 ## 7. Not done / not tested
 - Any real 14B; `start.bat` on Windows (the install flow passes on Linux); the world generator on a real model; Tarnstead and Last Scion in their own calendars
   (the tables were never written); prompt size is about 23k tokens per round before any trimming.
+
+
+## 8. Since the audit
+- The sorter's `note`, the judge's reason and the world step's `report` are handed to the telling; a retrieval gets the player's records; a continuation runs the world step.
+- A turn that cannot be recorded is dropped whole (`TurnFailed`); only the self-check, the ten-round check and the recap may fail without dropping it.
+- Three ways to run the AI with one engine: model file (explicit CPU-only, threads), local server, online API with a key. Two switches cut AI calls per turn.
+- Home shows whether the chosen AI passed "Check this model". README and `docs/INSTALL.md` were rewritten for all of this.
+- Not yet run on a real model: the `report` / `note` hand-offs and the merged asking mode.

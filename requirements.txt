@@ -1,3 +1,5 @@
 pyyaml
-# only if you run a model file inside the app (backend "gguf"); not needed for LM Studio / Ollama:
+# Only if you run a model file inside the app (backend "gguf"). Not needed for LM Studio, Ollama or an online API.
+# CPU-only prebuilt wheel (no compiler needed):
+#   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 # llama-cpp-python

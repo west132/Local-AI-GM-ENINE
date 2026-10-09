@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest
+coverage
+playwright     # only for tools/ui_check.py; then run: playwright install chromium
