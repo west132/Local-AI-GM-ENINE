@@ -256,3 +256,44 @@ def test_the_world_step_knows_the_player_it_is_deciding_for():
     step = next(s for s in flow.load_steps() if s["id"] == "react")
     text = flow.inputs(step, flow.Turn(w, "x"))
     assert "THE PLAYER CHARACTER NOW" in text and "Rin Hale" in text and "1950" in text and "Nightglass Blade" in text and "demonic_channeling" in text
+
+
+def test_a_telling_that_pastes_the_programs_labels_is_sent_back():
+    w = world()
+    scene = "Hobb runs a thick finger down the register, grunts, and slides a brass key across the desk. \"Room four. Breakfast is at seven.\""
+    t, bot = run(w, "I ask Hobb for a room", sort={"kind": "loop", "steps": ["react"]},
+                 react={"asks": [], "report": "Hobb checks the register and hands Mira a key.", "minutes": 5, "ops": []},
+                 tell=["WHAT HAPPENED: Hobb checks the register and hands Mira a key.", scene])
+    assert bot.seen.count("tell") == 2 and t.prose == scene
+
+
+def test_a_telling_that_only_copies_the_account_is_sent_back():
+    w = world()
+    scene = "Hobb runs a thick finger down the register, grunts, and slides a brass key across the desk. \"Room four. Breakfast is at seven.\""
+    t, bot = run(w, "I ask Hobb for a room", sort={"kind": "loop", "steps": ["react"]},
+                 react={"asks": [], "report": "Hobb checks the register and hands Mira a key.", "minutes": 5, "ops": []},
+                 tell=["Hobb checks the register and hands Mira a key.", scene])
+    assert bot.seen.count("tell") == 2 and t.prose == scene
+
+
+def test_labels_are_stripped_if_the_ai_still_pastes_them_on_the_last_try():
+    w = world()
+    t, _ = run(w, "I wait", sort={"kind": "loop", "steps": ["react"]},
+               react={"asks": [], "report": "Nothing the player notices.", "minutes": 5, "ops": []}, tell="WHAT HAPPENED: The rain keeps falling on the quay outside.")
+    assert "WHAT HAPPENED" not in t.prose and "rain keeps falling" in t.prose
+
+
+def test_going_to_a_named_place_always_runs_the_world_step_and_moves_the_player():
+    w = world()
+    t, _ = run(w, "I walk down to the Net Loft on Mill Lane", sort={"kind": "fast", "steps": [], "note": "She walks there."},
+               react={"asks": [], "report": "Mira reaches the loft.", "minutes": 15, "moved_to": "net_loft", "ops": []})
+    assert t.sort["kind"] == "loop" and "react" in t.sort["steps"] and w.get("world_state.location") == "net_loft"
+
+
+def test_a_fight_against_a_bystander_who_was_never_attacked_is_sent_back():
+    w = world()
+    good = {"foes": [{"id": "rat", "name": "rat", "v": 1, "size": "small"}], "stop": "x", "kill": True,
+            "exchanges": [{"foe": "rat", "roll": {"capability": 4, "base": 18}, "on_success": "full", "my_source": "unarmed", "on_failure": "setback", "attackers": []}]}
+    bad = dict(good, foes=[], exchanges=[dict(good["exchanges"][0], foe="hobb_marren")])
+    t, bot = run(w, "I attack the rat", sort={"kind": "loop", "steps": ["fight", "react"]}, fight=[bad, good])
+    assert bot.seen.count("fight") == 2 and w.state_of("hobb_marren") == "standing"

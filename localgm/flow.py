@@ -264,6 +264,21 @@ def addressed(world: World, text: str) -> list[str]:
             if any(len(w) >= 3 and re.search(r"\b" + re.escape(w) + r"\b", low) for w in str(r.get("name", "")).lower().split())]
 
 
+def named_places(world: World, text: str) -> list[str]:
+    """Other places the player's words name (the id, or two meaningful words of the place's name)."""
+    low = text.lower()
+    words = set(re.findall(r"[a-z]{4,}", low))
+    here = world.tree["world_state"]["location"]
+    out = []
+    for lid, loc in (world.tree.get("locations") or {}).items():
+        if lid == here or not isinstance(loc, dict):
+            continue
+        name_words = set(re.findall(r"[a-z]{4,}", str(loc.get("name", "")).lower()))
+        if lid.replace("_", " ") in low or len(name_words & words) >= 2:
+            out.append(lid)
+    return out
+
+
 def player_sheet(world: World) -> str:
     """What the player's character has, knows and is working on: the records a retrieval answers from."""
     p = world.player
@@ -286,8 +301,8 @@ def h_route(turn: Turn, out: dict):
                                                                       "continuation": "what carries on and for how long"}[out["kind"]])
     steps = list(dict.fromkeys(out.get("steps", [])))      # a step named twice runs once
     # Someone else is affected (section 6) whenever the player names a person who is here: that is never a fast action.
-    if addressed(turn.world, turn.text) and out["kind"] in QUIET:
-        out = {**out, "kind": "loop"}
+    if (addressed(turn.world, turn.text) or named_places(turn.world, turn.text)) and out["kind"] in QUIET:
+        out = {**out, "kind": "loop"}            # someone else is affected, or the player goes somewhere: the world answers and the player is moved
         if "react" not in steps:
             steps.append("react")
     # Carrying on takes time and the world keeps moving: the world step runs (minutes, dues, who answers) whatever the sorter wrote.
@@ -412,6 +427,18 @@ def _resolve(turn: Turn, r: dict) -> None:
 
 
 def h_combat(turn: Turn, out: dict):
+    w = turn.world
+    new = {f.get("id") for f in out.get("foes", [])}
+    named = set(addressed(w, turn.text))
+    for ex in out.get("exchanges", []):
+        foe = ex.get("foe")
+        rec = (w.tree.get("npcs") or {}).get(foe)
+        if foe in new or rec is None:
+            continue                                    # a new foe, or an id combat.run will refuse with its own message
+        st = str((rec.get("state") or {}).get("status", "")).lower()
+        if not (foe in named or any(k in st for k in ("fight", "hostile", "attack", "aggress", "hunting"))):
+            raise M.RuleError(f"{foe} ({rec.get('name')}) is not an opponent: the player's words do not name them and they are not fighting the player. "
+                              "A creature or enemy in the scene is a NEW foe: put it in `foes` with a new id and use that id in the exchanges.")
     turn.in_fight = True
     lines, facts, owed = combat.run(turn.world, out)
     turn.injury_owed += owed
@@ -705,8 +732,19 @@ def clean(prose: str) -> str:
     return "\n\n".join(out)
 
 
+_LABELS = re.compile(r"THE GM'S DECISION|WHAT HAPPENED|SETTLED \(no roll\)|THE PLAYER CHARACTER|RECORDED|\bRESULTS?\b:?|\bFACTS\b|\(from sorting[^)]*\)|\(the GM's account[^)]*\):?", re.I)
+
+
 def h_show(turn: Turn, out: str):
     prose = clean(out)
+    if _LABELS.search(prose):
+        if not turn.final:
+            raise M.RuleError("your text contains the program's labels (THE GM'S DECISION, WHAT HAPPENED, RESULT…). Tell the scene itself, in your own words, without any label.")
+        prose = clean(_LABELS.sub("", prose))
+    account = " ".join(re.sub(r"^[A-Z' ]+(\([^)]*\))?:\s*", "", f) for f in turn.facts if f.startswith("WHAT HAPPENED"))
+    norm = lambda x: re.sub(r"\W+", " ", x).lower().strip()
+    if account.strip() and not turn.final and norm(account) in norm(prose) and len(prose.split()) < len(account.split()) + 12:
+        raise M.RuleError("you only copied the account. Tell it as a scene: what is seen, heard and said, with the people acting and speaking.")
     echo = re.sub(r"\W+", " ", turn.text).strip().lower()
     if len(echo) >= 25 and echo in re.sub(r"\W+", " ", prose).lower():
         raise M.RuleError("your text repeats the player's own words. Tell what happens as a result: what the world and the people in it do")
