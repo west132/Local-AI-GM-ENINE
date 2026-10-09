@@ -159,7 +159,7 @@ turn:
   - id: wonder
     when: "'react' in sort.steps"
     rules: [02_directive, 11_actors, 19_play_lessons]
-    input: [place, actors_present, dues_fired, player_text, results_so_far, resolved_facts]
+    input: [place, actors_present, player_brief, records_in_play, dues_fired, player_text, results_so_far, resolved_facts]
     output:
       type: object
       required: [asks]
@@ -173,7 +173,7 @@ turn:
   - id: react
     when: "'react' in sort.steps"
     rules: [02_directive, 11_actors, 12_world, 19_play_lessons]
-    input: [place, actors_present, dues_fired, pressures, player_text, results_so_far, resolved_facts]
+    input: [place, actors_present, player_brief, records_in_play, dues_fired, pressures, player_text, results_so_far, resolved_facts]
     output:
       type: object
       required: [minutes, ops]

@@ -75,14 +75,19 @@ class Turn:
 # ---------- what the AI is shown ----------
 
 def brief(world: World) -> str:
-    """One line per record: enough for the AI to know what exists."""
+    """Every record the AI may cite, with its exact path, so it never has to guess how a path is spelled."""
     t = world.tree
-    out = [f"PLACE {t['world_state']['location']} · {t['world_state']['time'].get('daypart')}"]
-    for kind in ("npcs", "factions", "quests", "active_world_pressures"):
+    out = [f"PLACE {t['world_state']['location']} · {t['world_state']['time'].get('daypart')}",
+           "RECORDS YOU CAN CITE: write these exact paths in `cites` / `governs` (add .field to go deeper, e.g. npcs.<id>.state.status):"]
+    for kind in ("npcs", "factions", "quests", "active_world_pressures", "rights_obligations"):
         for rid, rec in (t.get(kind) or {}).items():
             if isinstance(rec, dict):
-                what = rec.get("job") or rec.get("objective") or rec.get("name") or ""
-                out.append(f"{kind[:-1] if kind.endswith('s') else kind} {rid}: {rec.get('name', rid)} — {what}")
+                what = rec.get("job") or rec.get("objective") or rec.get("role") or (rec.get("state") or {}).get("status") or rec.get("name") or ""
+                fields = ",".join(k for k, v in rec.items() if v not in (None, "", [], {}) and k not in ("name",))[:70]
+                out.append(f"{kind}.{rid} — {rec.get('name', rid)}: {str(what)[:90]}  [{fields}]")
+    if t.get("locations"):
+        out.append("PLACES (ids for locations.<id> and for moved_to): " + ", ".join(t["locations"]))
+    out.append("YOUR PLAYER'S OWN RECORD: player.skills, player.equipment, player.condition, player.money, player.knowledge")
     return "\n".join(out)
 
 
@@ -161,6 +166,18 @@ def inputs(step: dict, turn: Turn) -> str:
             st = w.tree.get("ending_state") or {"closed": []}
             parts.append("ENDING CONDITIONS (id: text) — closed: " + ", ".join(st["closed"]) + "\n"
                          + "\n".join(f"{i}: {t}" for i, t in rules.ending_list(w).items()))
+        elif name == "player_brief":          # what the world step must know about the player to decide fairly
+            p, cash = w.player, w.cash()
+            hp = (p.get("condition") or {}).get("hp")
+            lvl, mp = rules.level(w), rules.mp_max(w)
+            parts.append("THE PLAYER CHARACTER NOW: " + json.dumps({
+                "name": (p.get("identity") or {}).get("name"), "level": lvl, "hp": f"{hp}/{rules.hp_max(w)}",
+                **({"mp": f"{rules.mp_now(w)}/{mp}"} if mp else {}), "cash": " ".join(str(x) for x in cash if x != ""),
+                "carrying": [e.get("name") for e in p.get("equipment") or [] if isinstance(e, dict)],
+                "skills": {k: f"{v.get('class')} {v.get('tier')}" for k, v in (p.get("skills") or {}).items() if isinstance(v, dict)},
+                "injuries": [i.get("injury") for i in (p.get("condition") or {}).get("injuries") or [] if isinstance(i, dict)],
+                "resources": {k: (v.get("count") if v.get("tracking") == "exact" else v.get("usage_die")) for k, v in (p.get("resources") or {}).items() if isinstance(v, dict)},
+                "knows": list(((p.get("knowledge") or {}).get("facts") or {}))}, ensure_ascii=False))
         elif name == "player_state":
             p = w.player
             parts.append("YOU (the player character): " + json.dumps(
@@ -290,7 +307,7 @@ def h_route(turn: Turn, out: dict):
 def _bind(turn: Turn, key: str, e: dict, governs: list[str]) -> None:
     turn.resolved[key] = {"positive": e["positive"], "label": e["outcome"]}
     for g in governs or e.get("governs") or []:
-        turn.governs[g] = key
+        turn.governs[rules.canon_path(g)] = key
 
 
 def h_roll(turn: Turn, out: dict):
@@ -536,8 +553,16 @@ def _record_lines(turn: Turn, ops: list[dict]) -> None:
         (turn.hidden if _hidden_from_narrator(turn, op["path"]) else turn.facts).append(line)
 
 
+def _spell_paths(ops: list[dict]) -> None:
+    """'npc.hobb_marren.state' and 'person/hobb_marren/drives' are spellings of npcs.hobb_marren…; the program writes them its way."""
+    for o in ops:
+        if isinstance(o, dict) and isinstance(o.get("path"), str):
+            o["path"] = rules.canon_path(o["path"])
+
+
 def h_commit(turn: Turn, out: dict):
     """D: validate everything on a copy; commit all of it or none of it."""
+    _spell_paths(out.get("ops") or [])
     if out.get("asks"):                      # the AI wants more results before it decides: ask, answer, ask again
         if turn.ask_rounds >= 4:
             raise M.RuleError("no more questions this turn: decide with the results you have (asks must be empty)")
@@ -616,6 +641,7 @@ def _events(turn: Turn, ops: list[dict]) -> None:
 
 
 def h_commit_ops(turn: Turn, out: dict):
+    _spell_paths(out.get("ops") or [])
     w = turn.world
     trial = w.clone()
     faults = rules.op_faults(w, out["ops"], turn.resolved, turn.governs)

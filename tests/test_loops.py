@@ -226,3 +226,33 @@ def test_the_judges_reason_for_a_settled_action_is_handed_on():
                judge={"verdict": "certain", "cites": ["player"], "reason": "A trained courier opens an unlocked door."},
                react={"asks": [], "report": "The door opens.", "minutes": 1, "ops": []})
     assert any("SETTLED (no roll): A trained courier" in r for r in t.results)
+
+
+def test_the_ai_is_shown_the_exact_paths_it_must_cite_and_write():
+    w = world("ashfall_hunter")
+    t = flow.Turn(w, "x")
+    for sid in ("judge", "wonder", "react", "fight"):
+        step = next(s for s in flow.load_steps() if s["id"] == sid)
+        text = flow.inputs(step, t)
+        assert "npcs.nadia_voss —" in text and "PLACES" in text and "hale_workshop" in text and "player.skills" in text, sid
+
+
+def test_obvious_misspellings_of_a_record_path_are_read_the_programs_way():
+    from localgm import rules
+    assert rules.canon_path("npc.hobb_marren.state.status") == "npcs.hobb_marren.state.status"
+    assert rules.canon_path("person/hobb_marren/drives/wants") == "npcs.hobb_marren.drives.wants"
+    assert rules.canon_path("player.money") == "player.money" and rules.canon_path("world_state.location") == "world_state.location"
+    w = world()
+    rules.check_cites(w, ["npc.hobb_marren.state.status"])                 # was refused before: the record exists, only the spelling was off
+    with pytest.raises(M.RuleError):
+        rules.check_cites(w, ["npc.nobody.state.status"])                   # a record that does not exist is still refused
+    t, _ = run(w, sort={"kind": "loop", "steps": ["react"]},
+               react={"asks": [], "report": "Hobb relaxes.", "minutes": 1, "ops": [{"op": "set", "path": "npc.hobb_marren.state.mood", "value": "calm"}]})
+    assert w.get("npcs.hobb_marren.state.mood") == "calm"
+
+
+def test_the_world_step_knows_the_player_it_is_deciding_for():
+    w = world("ashfall_hunter")
+    step = next(s for s in flow.load_steps() if s["id"] == "react")
+    text = flow.inputs(step, flow.Turn(w, "x"))
+    assert "THE PLAYER CHARACTER NOW" in text and "Rin Hale" in text and "1950" in text and "Nightglass Blade" in text and "demonic_channeling" in text

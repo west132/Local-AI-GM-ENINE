@@ -676,9 +676,23 @@ def get_path(tree: dict, path: str):
     return node
 
 
+_KINDS = {"npc": "npcs", "person": "npcs", "character": "npcs", "actor": "npcs", "faction": "factions", "quest": "quests", "location": "locations",
+          "place": "locations", "pressure": "active_world_pressures", "active_world_pressure": "active_world_pressures",
+          "right": "rights_obligations", "obligation": "rights_obligations", "right_obligation": "rights_obligations",
+          "thread": "development_threads", "tracker": "trackers"}
+
+
+def canon_path(p) -> str:
+    """The exact form of a record path. A model that writes 'npc.hobb_marren.state' or 'person/hobb_marren/drives' means npcs.hobb_marren…;
+    the program reads it as that (mechanical spelling is the program's job; whether the record exists is still checked)."""
+    p = str(p).strip().strip(".").replace("/", ".")
+    head, _, rest = p.partition(".")
+    return ".".join(x for x in (_KINDS.get(head.lower(), head), rest) if x)
+
+
 def check_cites(w: World, cites: list[str]) -> None:
     """A verdict rests on records that exist. Nothing is settled by something the records do not hold."""
-    missing = [c for c in cites if get_path(w.tree, c) is None]
+    missing = [c for c in cites if get_path(w.tree, canon_path(c)) is None]
     if missing:
         raise M.RuleError(f"these cited records do not exist: {missing}. Cite paths that are in the records, or do not rely on them.")
 
@@ -692,6 +706,7 @@ def frozen(w: World, key: str) -> dict | None:
 
 def record_result(w: World, key: str, kind: str, label: str, positive: bool, text: str, governs: list[str]) -> dict:
     """A resolved roll or answer becomes a fact of the campaign; later rounds respect it."""
+    governs = [canon_path(g) for g in governs or []]
     e = {"round": w.round + 1, "key": key, "kind": kind, "outcome": label, "positive": positive, "text": text, "governs": list(governs)}
     w.tree.setdefault("resolved", []).append(e)
     return e
