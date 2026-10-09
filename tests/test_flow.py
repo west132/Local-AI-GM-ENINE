@@ -10,7 +10,7 @@ BG = pathlib.Path(__file__).resolve().parent.parent / "examples/harbour_guesthou
 class Scripted:
     """Stand-in for the model: returns canned replies per step, in the order asked."""
     def __init__(self, replies): self.replies, self.seen = list(replies), []
-    def ask(self, system, user, schema):
+    def ask(self, system, user, schema, max_tokens=None):
         self.seen.append((system, user)); return self.replies.pop(0)
 
 
@@ -151,3 +151,13 @@ def test_wh_question_and_unsupported_likelihood_are_not_rolled():
         {"question": "Does Hobb have a spare room?", "likelihood": 2, "for": "the house is half empty"}]}
     bad = flow.do_apply(t, out)
     assert len(bad) == 2 and len([l for l in t.lines if l.startswith("ask")]) == 1
+
+
+def test_a_looping_narrator_is_cut_off_by_the_program():
+    loop = "You step onto the quay. Gulls circle overhead.\n\n" + "\n".join(
+        f'You tell him your favourite thing is number {i}, and he smiles. "That is a great thing. What is your favourite colour?"' for i in range(1, 60))
+    out = flow.clean("```text\n" + loop + "\n```")
+    assert len(out.split()) <= flow.MAX_WORDS and "```" not in out
+    assert out.count("What is your favourite colour") <= 1 or len(out.split()) < 360
+    same = flow.clean("The door opens. The door opens. The door opens. A man enters.")
+    assert same == "The door opens. A man enters."

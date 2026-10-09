@@ -158,12 +158,13 @@ turn:
     when: always
     rules: [15_telling_it]
     input: [place, facts_from_program, player_text]
+    max_tokens: 500
     output: {type: string}
     program: show           # header, roll lines, cash line are printed by the program around this text
 
   - id: audit
     when: always
-    rules: [03_invariants]
+    rules: [03_invariants, 15_telling_it]
     input: [place, prose, facts_from_program]
     output:
       type: object

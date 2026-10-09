@@ -102,7 +102,8 @@ def ask_ai(llm, step: dict, turn: Turn, extra: str = ""):
     system = rules_text(step["rules"])
     if sch.get("type") != "string":
         system += "\n\nREPLY with one JSON object only:\n" + schema.render(sch)
-    reply = llm.ask(system, inputs(step, turn) + extra, None if sch.get("type") == "string" else sch)
+    reply = llm.ask(system, inputs(step, turn) + extra, None if sch.get("type") == "string" else sch,
+                    max_tokens=step.get("max_tokens"))
     return reply
 
 
@@ -202,8 +203,30 @@ def do_apply(turn: Turn, out: dict) -> list[str]:
     return refused
 
 
+MAX_WORDS = 350
+
+
 def clean(prose: str) -> str:
-    return re.sub(r"^```\w*\s*|\s*```$", "", prose.strip()).strip()
+    """Strip code fences, drop any sentence already said, and cap the length at a sentence end.
+    A model that starts to loop is cut off by the program rather than shown to the player."""
+    prose = re.sub(r"^```\w*\s*|\s*```$", "", prose.strip()).strip()
+    seen, out, words = set(), [], 0
+    for para in prose.split("\n\n"):
+        kept = []
+        for sent in re.findall(r"[^.!?。！？]+[.!?。！？]*[\"”')]*\s*", para):
+            key = re.sub(r"\W+", " ", sent.lower()).strip()
+            if key in seen or not key:
+                continue
+            seen.add(key)
+            if words + len(sent.split()) > MAX_WORDS:
+                break
+            kept.append(sent.strip())
+            words += len(sent.split())
+        if kept:
+            out.append(" ".join(kept))
+        if words >= MAX_WORDS:
+            break
+    return "\n\n".join(out)
 
 
 def intake(world: World, llm, batch: int = 4) -> None:

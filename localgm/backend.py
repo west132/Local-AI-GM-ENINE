@@ -26,8 +26,8 @@ class OpenAICompat:
     def __init__(self, base="http://localhost:1234/v1", model="", temperature=0.3, max_tokens=1500, timeout=600):
         self.base, self.model, self.temperature, self.max_tokens, self.timeout = base.rstrip("/"), model, temperature, max_tokens, timeout
 
-    def ask(self, system, user, schema=None):
-        body = {"model": self.model, "temperature": self.temperature, "max_tokens": self.max_tokens,
+    def ask(self, system, user, schema=None, max_tokens=None):
+        body = {"model": self.model, "temperature": self.temperature, "max_tokens": max_tokens or self.max_tokens,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
         if schema is not None:
             body["response_format"] = {"type": "json_schema", "json_schema": {"name": "reply", "strict": False, "schema": schema}}
@@ -44,17 +44,17 @@ class LlamaCpp:
         self.llm = Llama(model_path=str(path), n_ctx=n_ctx, n_gpu_layers=n_gpu_layers, verbose=False)
         self.temperature, self.max_tokens = temperature, max_tokens
 
-    def ask(self, system, user, schema=None):
+    def ask(self, system, user, schema=None, max_tokens=None):
         kw = {"response_format": {"type": "json_object", "schema": schema}} if schema is not None else {}
         out = self.llm.create_chat_completion(
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=self.temperature, max_tokens=self.max_tokens, **kw)
+            temperature=self.temperature, max_tokens=max_tokens or self.max_tokens, **kw)
         return _finish(out["choices"][0]["message"]["content"], schema)
 
 
 class Demo:
     """Canned, valid replies: lets the app run end to end with no model at all."""
-    def ask(self, system, user, schema=None):
+    def ask(self, system, user, schema=None, max_tokens=None):
         if schema is None:
             return "(demo) " + user.split("PLAYER:")[-1].split("\n")[0].strip()[:120]
         props = schema.get("properties", {})
