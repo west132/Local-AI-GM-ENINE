@@ -50,3 +50,38 @@ class LlamaCpp:
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
             temperature=self.temperature, max_tokens=self.max_tokens, **kw)
         return _finish(out["choices"][0]["message"]["content"], schema)
+
+
+class Demo:
+    """Canned, valid replies: lets the app run end to end with no model at all."""
+    def ask(self, system, user, schema=None):
+        if schema is None:
+            return "(demo) " + user.split("PLAYER:")[-1].split("\n")[0].strip()[:120]
+        props = schema.get("properties", {})
+        if "kind" in props:
+            return {"kind": "fast", "steps": []}
+        if "ok" in props:
+            return {"ok": True}
+        if "actors" in props:
+            return {"actors": []}
+        return {}
+
+
+def make(settings):
+    """The backend the settings page chose."""
+    d = settings.data
+    if d["backend"] == "demo":
+        return Demo()
+    if d["backend"] == "server":
+        return OpenAICompat(d["url"], d["model"], d["temperature"], d["max_tokens"])
+    files = settings.ggufs()
+    name = d["gguf"] or (files[0] if files else "")
+    if not name:
+        raise FileNotFoundError("no model file in the models folder; put a .gguf there or choose another backend in Settings")
+    return LlamaCpp(settings.models / name, d["ctx"], -1, d["temperature"], d["max_tokens"])
+
+
+def probe(url: str) -> list[str]:
+    """Ask a server which models it has. Raises on failure."""
+    with urllib.request.urlopen(url.rstrip("/") + "/models", timeout=5) as r:
+        return [m["id"] for m in json.load(r).get("data", [])]

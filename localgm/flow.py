@@ -106,9 +106,14 @@ def ask_ai(llm, step: dict, turn: Turn, extra: str = ""):
     return reply
 
 
+on_step = None      # the app sets this to show which step is running
+
+
 def run_step(llm, step: dict, turn: Turn, extra: str = ""):
     """Ask; validate against the form; one retry that lists the faults."""
     t0 = time.time()
+    if on_step:
+        on_step(step["id"])
     try:
         return _run_step(llm, step, turn, extra)
     finally:
