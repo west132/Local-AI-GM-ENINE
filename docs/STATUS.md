@@ -13,6 +13,7 @@ Status of each V5 rule in the running program. A line here is true only if a tes
 | XP award on a win (numeric-level worlds) | partial | code path exists in `_resolve`; no test yet |
 | Skill tier / class growth at a boundary | not yet | `mechanics.grow` exists but nothing calls it |
 | Odds stop (risky roll waits for the player) | implemented | `test_odds_stop_waits…` |
+| Sorting floor: naming a person who is here can't be a fast action | implemented | `test_naming_a_person…` |
 | Money | implemented | `test_money_and_time…` |
 | Time and actor dues, incl. dues that fall during an action | implemented | `test_a_due_that_falls…` |
 | Pressure clocks (AI judges "operated", program fills and reschedules) | implemented | `test_a_due_clock…`; on-fill consequences are given to the AI to resolve, not enforced |

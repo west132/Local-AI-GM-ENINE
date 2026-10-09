@@ -186,7 +186,17 @@ def _roll_lines(turn: Turn, res: dict, cap: int, tool: int, diff: int, label: st
                       f"Difficulty: {diff} | Outcome: {'Success' if res['success'] else 'Failure'}")
 
 
+def addressed(world: World, text: str) -> list[str]:
+    """Present people the player's words name (any word of their name, 3+ letters)."""
+    low = text.lower()
+    return [rid for rid, r in world.actors_here().items()
+            if any(len(w) >= 3 and re.search(r"\b" + re.escape(w) + r"\b", low) for w in str(r.get("name", "")).lower().split())]
+
+
 def h_route(turn: Turn, out: dict):
+    # Someone else is affected (section 6) whenever the player names a person who is here: that is never a fast action.
+    if addressed(turn.world, turn.text) and out["kind"] in ("fast", "retrieval", "continuation") and "react" not in out["steps"]:
+        out = {**out, "kind": "loop", "steps": out["steps"] + ["react"]}
     turn.sort = out
     if turn.pending and out["kind"] != "confirm":
         turn.world.tree.pop("pending", None)          # the player changed their mind: dropped at no cost

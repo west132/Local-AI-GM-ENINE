@@ -306,3 +306,13 @@ def test_a_looping_narrator_is_cut_off_by_the_program():
     out = flow.clean("```text\n" + loop + "\n```")
     assert len(out.split()) <= flow.MAX_WORDS and "```" not in out
     assert flow.clean("The door opens. The door opens. The door opens. A man enters.") == "The door opens. A man enters."
+
+
+def test_naming_a_person_who_is_here_is_never_a_fast_action():
+    w = world()
+    llm = Scripted([FAST, {"asks": []}, {"minutes": 5, "ops": []}, "Hobb nods.", OK])
+    t = flow.run_turn(w, llm, "I ask Hobb whether he has a room")
+    assert "react" in t.ran and t.sort["kind"] == "loop"
+    w2 = world()
+    t = flow.run_turn(w2, Scripted([FAST, "You sit.", OK]), "I sit down")
+    assert "react" not in t.ran
