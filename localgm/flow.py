@@ -164,15 +164,30 @@ def apply_ops(world: World, ops: list[dict]) -> list[str]:
     return refused
 
 
+_WH = re.compile(r"^\s*(what|who|whom|whose|where|when|why|how|which)\b", re.I)
+
+
+def ask_problem(a: dict) -> str | None:
+    """An open question is yes/no and every likelihood point rests on a stated fact (section 11)."""
+    if _WH.match(a["question"]) or not a["question"].strip().endswith("?"):
+        return f"question {a['question']!r} must be a yes/no question ending in '?'; what the records already say is not rolled"
+    if a["likelihood"] and not (a.get("for") or a.get("against")):
+        return f"question {a['question']!r}: a likelihood of {a['likelihood']:+d} needs the fact behind it in 'for' or 'against'"
+    return None
+
+
 def do_apply(turn: Turn, out: dict) -> list[str]:
     """Rolls the asks, applies the ops, moves the clock once. Returns what the program refused."""
     w = turn.world
+    asks, refused_asks = [], []
     for a in out.get("asks", []):
+        (refused_asks if ask_problem(a) else asks).append(a)
+    for a in asks:
         r = M.ask(a["likelihood"])
         d1, d2 = r["dice"]
         turn.lines.append(f"ask 2d10: {d1}+{d2} {r['likelihood']:+d} = {r['total']} → {r['band']} ({a['question']})")
         turn.facts.append(f"QUESTION '{a['question']}' → {r['band']}")
-    refused = apply_ops(w, out["ops"])
+    refused = [ask_problem(a) for a in refused_asks] + apply_ops(w, out["ops"])
     fired = w.due()
     days = w.advance(int(out["minutes"]))
     for path, d in fired:           # the AI saw these dues this turn; they are spent

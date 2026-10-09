@@ -140,3 +140,14 @@ def test_money_as_a_record_still_pays_and_never_goes_below_zero():
     assert w.cash()[0] == amount - 5 and cur
     with pytest.raises(M.RuleError):
         w.pay(-10 ** 6)
+
+
+def test_wh_question_and_unsupported_likelihood_are_not_rolled():
+    w = world()
+    t = flow.Turn(w, "x")
+    out = {"minutes": 5, "ops": [], "asks": [
+        {"question": "What has been happening in town?", "likelihood": 3},
+        {"question": "Does Hobb have a spare room?", "likelihood": 2},
+        {"question": "Does Hobb have a spare room?", "likelihood": 2, "for": "the house is half empty"}]}
+    bad = flow.do_apply(t, out)
+    assert len(bad) == 2 and len([l for l in t.lines if l.startswith("ask")]) == 1
