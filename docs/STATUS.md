@@ -45,5 +45,14 @@ Status of each V5 rule in the running program. A line here is true only if a tes
 | Sorting floor: naming a person who is here is never a fast action | implemented | `test_naming_a_person…` |
 | Open-question rules (yes/no, likelihood needs a fact) | implemented | `test_wh_question…` |
 | Fights (exchanges, damage, soak, down/dead) | partial | `combat.py`; morale and per-attacker budgets are the AI's judgement |
+| Ten-round checkpoint: open quests, obligations and settled questions are listed for the AI to close or keep; commits by the program | implemented | `tests/test_checkpoint_companions.py`. Whether an item is really settled is the AI's judgement |
+| Ending recap (epilogue step) when a scenario ends | implemented | `test_checkpoint_companions.py` |
+| Companions: XP and growth tracked by the program, joined/left by typed changes | implemented | `test_checkpoint_companions.py` |
+| Ask first, roll second: a judge verdict `ask` runs the question loop before any roll; no cap on the number of asks; obvious answers are settled without dice | implemented | `test_dice_use.py`, `test_authority.py` |
+| Save import from a V5 chat save (Part A + capsule over the BACKGROUND), export back to a SAVE file, CRLF-safe | implemented | `tests/test_savefile.py` on the real R10 save; `tools/ui_check.py` imports it through the page. Round-trip is of the tree the program holds, not of every wording of a chat save |
+| Work source routine (a fixer/guild/patron's weekly "did work come in?" check, owned by the program, survives a replan) | implemented | `test_work_source_check…`. The AI answers the question; the program schedules it |
+| Temper of a new non-BACKGROUND actor: 2d10 ≥ 17 (≥ 15 opposing), rolled once, kept | implemented | `test_new_actor_temper…`. Combat foes created by the fight step are not rolled |
+| World generator: six checked forms from a short idea (premise, price list, player, places, cast, story); full names, genders, prices, module choice, dues, starting abilities of the source game, references all checked; the program writes the BACKGROUND | implemented, tested with scripted answers | `tests/test_generate.py`, `tools/ui_check.py`. **Not tried on a real model.** Whether the AI knows a source game's real starting abilities is its own knowledge; the program only checks they are listed and held by a skill |
+| Install in a clean folder and fresh virtual environment, then start | tested on Linux | `tools/install_check.py`. **start.bat was not run on Windows**; it was reviewed and given CRLF line endings |
 | Whether a consequence is sensible inside a result's bounds; whether a cited record really supports a verdict | AI judgement | visible in the journal |
 | Real-model play over a long campaign | not tested | only a 3B coding model has been run, for a few turns |
