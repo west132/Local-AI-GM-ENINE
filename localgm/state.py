@@ -120,17 +120,39 @@ class World:
             raise M.RuleError("not enough money")
         self.player["money"] = new
 
+    def _vitals(self, who: str):
+        """(record, condition dict, max HP) for the player or an npc id."""
+        if who == "player":
+            rec, cond = self.player, self.player.setdefault("condition", {})
+        else:
+            rec = self.tree["npcs"][who]
+            cond = rec.setdefault("state", {})
+        v = rec.get("v")
+        if v is None:
+            v = {"ordinary": 1, "seasoned": 3, "veteran": 5, "exceptional": 8, "heroic": 11,
+                 "legendary": 20}.get(rec.get("vitality", "ordinary"), 1)
+            if "progression" in rec:
+                v = rec["progression"]["state"]["level"]
+        return rec, cond, M.max_hp(int(v), rec.get("size", "normal"))
+
     def hurt(self, damage: list[int], soak: int = 0, who: str = "player") -> dict:
-        rec = self.player if who == "player" else self.tree["npcs"][who]
-        cond = rec.setdefault("condition", {}) if who == "player" else rec.setdefault("state", {})
-        v = {"ordinary": 1, "seasoned": 3, "veteran": 5, "exceptional": 8, "heroic": 11,
-             "legendary": 20}.get(rec.get("vitality", "ordinary"), 1)
-        if "progression" in rec:
-            v = rec["progression"]["state"]["level"]
-        hp_max = M.max_hp(v, rec.get("size", "normal"))
-        r = M.harm(int(cond.get("hp", hp_max)), hp_max, damage, soak)
+        _, cond, hp_max = self._vitals(who)
+        before = int(cond.get("hp", hp_max))
+        r = M.harm(before, hp_max, damage, soak)
         cond["hp"] = r["hp"]
-        return r
+        if r["state"] == "standing":
+            cond.pop("down", None)
+        else:
+            cond["down"] = r["state"]
+        return {**r, "before": before}
+
+    def state_of(self, who: str) -> str:
+        _, cond, hp_max = self._vitals(who)
+        hp = int(cond.get("hp", hp_max))
+        return "standing" if hp > 0 else cond.get("down", "down")
+
+    def player_state(self) -> str:
+        return self.state_of("player")
 
     def credit_skill(self, skill: str, success: bool, diff: int, challenge=None) -> int:
         """Add evidence from one roll; at most once per skill per growth period."""

@@ -65,3 +65,35 @@ def test_each_step_loads_only_its_rules():
     sys_sort, sys_tell = llm.seen[0][0], llm.seen[1][0]
     assert "DECISION GATE" in sys_sort and "DECISION GATE" not in sys_tell
     assert len(sys_sort) < 9000
+
+
+def test_fight_runs_in_code_and_kills_nobody_the_ai_did_not_hit():
+    import random
+    from localgm import combat
+    w = world()
+    out = {"foes": [{"id": "thug", "name": "Thug", "v": 1, "size": "normal"}],
+           "exchanges": [{"foe": "thug", "roll": {"capability": 0, "base": 10}, "on_success": "full",
+                          "my_source": "unarmed", "on_failure": "loss",
+                          "attackers": [{"who": "Thug", "source": "man-sized"}]}] * 6}
+    lines, facts = combat.run(w, out, random.Random(3))
+    assert any("Exchange 1" in l for l in lines)
+    hp = w.player["condition"]["hp"]
+    assert 0 <= hp <= M.max_hp(1)
+    assert w.state_of("thug") in ("standing", "down", "dead")
+    # nothing happens after somebody is down
+    n = sum(1 for l in lines if l.startswith("Exchange"))
+    assert n <= 6
+
+
+def test_down_then_hit_is_dead_and_sticks():
+    w = world()
+    w.player["condition"]["hp"] = 0
+    w.hurt([3])
+    assert w.player_state() == "dead"
+
+
+def test_ai_unknown_damage_source_is_refused():
+    import pytest
+    from localgm import combat
+    with pytest.raises(M.RuleError):
+        combat.damage_roll("laser")

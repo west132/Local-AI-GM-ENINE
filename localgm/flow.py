@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, pathlib
 import yaml
 
-from . import mechanics as M, schema
+from . import combat, mechanics as M, schema
 from .state import World, WriteRefused
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent / "engine"
@@ -143,11 +143,17 @@ def run_turn(world: World, llm, text: str) -> Turn:
     turn.ran.append("sort")
     todo = [s for s in turn.sort["steps"] if s in steps]
     for sid in todo:
-        if sid == "fight":
-            raise NotImplementedError("the combat executor is not built yet")
         out = run_step(llm, steps[sid], turn)
         turn.ran.append(sid)
-        if sid == "judge":
+        if sid == "fight":
+            try:
+                lines, facts = combat.run(world, out)
+            except M.RuleError as e:
+                out = run_step(llm, steps[sid], turn, f"\n\nThe program refused: {e}. Reply again, fixed.")
+                lines, facts = combat.run(world, out)
+            turn.lines += lines
+            turn.facts += facts
+        elif sid == "judge":
             do_roll(turn, out)
         else:
             bad = do_apply(turn, out)

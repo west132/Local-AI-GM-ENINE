@@ -50,21 +50,38 @@ turn:
   - id: fight
     when: "'fight' in sort.steps"
     rules: [10_fights]
-    input: [player_text, combatants, plan, morale_norms]
+    input: [player_text, player_state, records_in_play, plan, morale_norms]
     output:
       type: object
       required: [exchanges]
       properties:
-        exchanges:
+        foes:
           type: array
+          description: "opponents not yet in the records; the program adds them"
           items:
             type: object
-            required: [who, kind]
+            required: [id, name, v, size]
             properties:
-              who:    {type: string}
-              kind:   {type: string, enum: [attack, defend, move, flee, yield]}
-              target: {type: string}
-              source: {type: string, description: "damage source from the damage table"}
+              id:   {type: string}
+              name: {type: string}
+              v:    {type: integer, minimum: 1, description: "its level for HP"}
+              size: {type: string, enum: [small, normal, large, huge]}
+        exchanges:
+          type: array
+          maxItems: 6
+          description: "the exchanges the player's orders and style cover, in order"
+          items:
+            type: object
+            required: [foe, roll, on_success, my_source, on_failure, attackers]
+            properties:
+              foe:        {type: string, description: "id of the engaged opponent"}
+              roll:       {type: object, required: [capability, base], properties: {capability: {type: integer, enum: [-4, -2, 0, 2, 4]}, base: {type: integer, minimum: 1, maximum: 20}, conditions: {type: object}, tool: {type: object}}}
+              on_success: {type: string, enum: [partial, full, decisive]}
+              my_source:  {type: string, description: "damage source of the player's blow: unarmed|light|one-handed|two-handed|bow|small|man-sized|large|huge"}
+              on_failure: {type: string, enum: [setback, loss, severe]}
+              attackers:  {type: array, description: "who can hit the player on a failure", items: {type: object, required: [who, source], properties: {who: {type: string}, source: {type: string}}}}
+              soak:       {type: integer, minimum: 0, maximum: 2}
+        stop: {type: string, description: "why the orders no longer cover the next exchange, if so"}
     program: combat         # rolls each exchange, damage, soak, HP, down/dead, lasting injury
 
   - id: react
