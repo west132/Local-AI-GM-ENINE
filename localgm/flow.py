@@ -331,7 +331,7 @@ def _resolve(turn: Turn, r: dict) -> None:
     if win and r.get("challenge") and r.get("scope"):
         msg = rules.award_xp(w, r["challenge"], r["scope"])
         if msg:
-            w.tree["world_state"].setdefault("material_history", []).append(f"Event in round {w.round + 1} paid XP (scope {r['scope']}).")
+            rules.add_history(w, f"Event in round {w.round + 1} paid XP (scope {r['scope']}).")
             turn.facts.append(msg)
     harm = st.get("harm", "none")
     if not win and harm in ("loss", "severe"):

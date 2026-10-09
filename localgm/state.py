@@ -31,6 +31,17 @@ def _same_shape(old, new) -> bool:
     return type(old) is type(new)
 
 
+def plain(v):
+    """YAML turns an unquoted 2026-10-07 into a date object; a save must hold only text, numbers, lists and objects."""
+    if isinstance(v, dict):
+        return {str(k): plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [plain(x) for x in v]
+    if isinstance(v, (_dt.date, _dt.datetime)):
+        return v.isoformat()
+    return v
+
+
 def background_tree(text: str) -> dict:
     """A filled BACKGROUND has many ```yaml blocks; merge them into one tree."""
     tree: dict = {}
@@ -40,7 +51,7 @@ def background_tree(text: str) -> dict:
             tree.update(d)
     if not tree.get("background_id"):
         raise ValueError("BACKGROUND needs a background_id")
-    return tree
+    return plain(tree)
 
 
 def _walk(tree, path: str, create=False):

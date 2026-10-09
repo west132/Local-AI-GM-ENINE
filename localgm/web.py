@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, html, json, pathlib, shutil, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import backend, flow, modelcheck, settings as S
+from . import backend, flow, modelcheck, savefile, settings as S
 from .store import Game
 
 HERE = pathlib.Path(__file__).resolve().parent.parent
@@ -105,7 +105,16 @@ def home() -> bytes:
 <label>World</label><select name="world">{opts}<option value="__paste">Paste my own BACKGROUND…</option></select>
 <div id="paste" hidden><label>BACKGROUND text</label><textarea name="background" rows="8"></textarea></div>
 <p class="mut">AI: {html.escape(where)} — change it in <a href="/settings">Settings</a>.</p><button>Start</button></form>
-<script>const s=document.querySelector('select[name=world]');s.onchange=()=>document.getElementById('paste').hidden=s.value!='__paste'</script>'''
+<script>const s=document.querySelector('select[name=world]');s.onchange=()=>document.getElementById('paste').hidden=s.value!='__paste'</script>
+<h1>Continue from a save file</h1><form class="card" method="post" action="/import">
+<p class="mut">A SAVE file made in a chat (or exported here). Choose the world it belongs to.</p>
+<label>Game name</label><input name="name" required pattern="[A-Za-z0-9_\\-]+" placeholder="my_game_r10">
+<label>World</label><select name="world">{opts}<option value="__paste">Paste my own BACKGROUND…</option></select>
+<div id="paste2" hidden><label>BACKGROUND text</label><textarea name="background" rows="5"></textarea></div>
+<label>Save file</label><input type="file" id="savefile" accept=".md,.txt"><textarea name="save" id="savetext" rows="4" required placeholder="…or paste the save here"></textarea>
+<button>Import and continue</button></form>
+<script>document.querySelectorAll('select[name=world]')[1].onchange=e=>document.getElementById('paste2').hidden=e.target.value!='__paste';
+document.getElementById('savefile').onchange=async e=>{{document.getElementById('savetext').value=await e.target.files[0].text()}}</script>'''
     return page("Home", body)
 
 
@@ -155,7 +164,7 @@ def play_page(name: str) -> bytes:
 <div class="card log" id="log">{log or '<span class="mut">Say what you do.</span>'}</div>
 <div class="card"><form id="f" class="row"><input class="grow" id="in" autocomplete="off" placeholder="What do you do?" autofocus>
 <button id="go">Send</button></form><p id="st" class="mut"></p>
-<div class="row"><a class="btn alt" href="/">Home</a><a class="btn alt" href="/settings">Settings</a>
+<div class="row"><a class="btn alt" href="/">Home</a><a class="btn alt" href="/settings">Settings</a><a class="btn alt" href="/export/{urllib.parse.quote(name)}">Export save</a>
 <form id="rw" class="row"><select id="rn">{rounds}</select><button class="alt">Go back to this round</button></form></div></div>
 <script>
 const N={json.dumps(name)},$=id=>document.getElementById(id);
@@ -222,6 +231,10 @@ class H(BaseHTTPRequestHandler):
                 return self.send(settings_page())
             if parts[0] == "play" and len(parts) == 2:
                 return self.send(play_page(parts[1]))
+            if parts[0] == "export" and len(parts) == 2:
+                g = APP.open(parts[1])
+                body = savefile.export_save(g.world, (g.dir / "background.md").read_text(encoding="utf-8"), parts[1]).encode()
+                return self.send(body, 200, "text/markdown; charset=utf-8", [("Content-Disposition", f'attachment; filename="save_{parts[1]}_R{g.world.round}.md"')])
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "status":
                 j = dict(APP.job)
                 out = {"state": j.get("state", "idle"), "step": j.get("step", ""), "secs": int(time.time() - j["t0"]) if "t0" in j else 0}
@@ -254,6 +267,8 @@ class H(BaseHTTPRequestHandler):
                 return self.redirect("/")
             if parts == ["new"]:
                 return self.new_game(f)
+            if parts == ["import"]:
+                return self.import_game(f)
             if parts[0] == "api" and len(parts) == 3:
                 name = parts[1]
                 if parts[2] == "turn":
@@ -298,6 +313,24 @@ class H(BaseHTTPRequestHandler):
             return {"reload": True}
         if not APP.start(name, "intake", setup):
             return self.send(page("Busy", '<p>The AI is busy with another job. <a href="/">Home</a></p>'), 409)
+        self.redirect(f"/play/{urllib.parse.quote(name)}")
+
+    def import_game(self, f):
+        name = pathlib.Path(f["name"]).name
+        bg = f.get("background", "") if f.get("world") == "__paste" else \
+            (HERE / "examples" / pathlib.Path(f["world"]).name / "background.md").read_text(encoding="utf-8")
+        try:
+            world, notes = savefile.import_save(f["save"], bg)
+        except Exception as e:
+            return self.send(page("Cannot read that save", f'<h1>Cannot read that save</h1><p class="bad">{html.escape(type(e).__name__ + ": " + str(e))}</p>'
+                                  '<p>Check that the world chosen is the one the save was made on.</p><p><a href="/">Home</a></p>'), 400)
+        g = Game.from_world(APP.settings.saves, name, bg, world)
+        if world.needs_intake():
+            def setup():
+                flow.intake(g.world, APP.model())
+                g.save()
+                return {"reload": True}
+            APP.start(name, "intake", setup)
         self.redirect(f"/play/{urllib.parse.quote(name)}")
 
     def turn(self, name: str, text: str):

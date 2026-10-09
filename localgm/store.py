@@ -27,6 +27,17 @@ class Game:
         return g
 
     @classmethod
+    def from_world(cls, root, name: str, background_text: str, world: World) -> "Game":
+        d = pathlib.Path(root) / name
+        if d.exists():
+            raise FileExistsError(f"{d} exists")
+        (d / "snapshots").mkdir(parents=True)
+        (d / "background.md").write_text(background_text, encoding="utf-8")
+        g = cls(d, world)
+        g.save()
+        return g
+
+    @classmethod
     def open(cls, root, name: str) -> "Game":
         d = pathlib.Path(root) / name
         s = json.loads((d / "state.json").read_text(encoding="utf-8"))

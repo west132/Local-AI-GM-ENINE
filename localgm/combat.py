@@ -91,6 +91,6 @@ def run(world: World, out: dict, rng=None) -> tuple[list[str], list[str], int]:
         msgs = rules.xp_pass(world, [int(world.tree["npcs"][f].get("v", 1)) for f in downed], "meaningful")
         for f in downed:
             world.tree["npcs"][f]["xp_paid"] = True
-        world.tree["world_state"].setdefault("material_history", []).append(f"Combat in round {world.round + 1}: {', '.join(downed)} overcome.")
+        rules.add_history(world, f"Combat in round {world.round + 1}: {', '.join(downed)} overcome.")
         facts += msgs
     return lines, facts, owed

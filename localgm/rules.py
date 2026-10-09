@@ -102,6 +102,15 @@ def growth_boundary(w: World, sources: dict[str, str]) -> list[str]:
     return out + injury_boundary(w)
 
 
+def add_history(w: World, text: str) -> None:
+    """One line in the world's material history; a chat-made save keys its entries, a background lists them."""
+    mh = w.tree["world_state"].setdefault("material_history", [])
+    if isinstance(mh, dict):
+        mh[f"r{w.round + 1}_{len(mh) + 1}"] = text
+    else:
+        mh.append(text)
+
+
 # ---------- XP ----------
 
 def companions(w: World) -> dict[str, dict]:
