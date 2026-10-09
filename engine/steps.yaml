@@ -8,7 +8,7 @@ turn:
   - id: sort
     when: always
     rules: [01_jobs, 03_invariants, 05_player_side, 06_sorting]
-    input: [player_text, place, last_lines, active_quests, standing_orders]
+    input: [player_text, place, active_quests]
     output:
       type: object
       required: [kind, steps]
@@ -118,7 +118,7 @@ turn:
   - id: quest
     when: "'quest' in sort.steps"
     rules: [13_quests, 14_endings]
-    input: [player_text, quests, results_so_far]
+    input: [player_text, active_quests, results_so_far]
     output:
       type: object
       required: [ops]
@@ -129,14 +129,14 @@ turn:
   - id: tell
     when: always
     rules: [15_telling_it]
-    input: [facts_from_program, player_text, style, language]
+    input: [place, facts_from_program, player_text]
     output: {type: string}
     program: show           # header, roll lines, cash line are printed by the program around this text
 
   - id: audit
     when: always
     rules: [03_invariants]
-    input: [prose, facts_from_program]
+    input: [place, prose, facts_from_program]
     output:
       type: object
       required: [ok]

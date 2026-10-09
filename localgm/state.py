@@ -5,7 +5,7 @@ Numbers the AI must not write (HP, money, XP, evidence, the clock) change only t
 methods below, which call mechanics.
 """
 from __future__ import annotations
-import copy, re
+import copy, datetime as _dt, re
 import yaml
 
 from . import clock, mechanics as M
@@ -45,10 +45,38 @@ def _walk(tree, path: str, create=False):
     return cur, keys[-1]
 
 
+_DUE = re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?\s*(.*)$")
+
+
+def _normalize_plans(tree: dict) -> None:
+    """BACKGROUND writes an actor's plan as state.plan + state.due (text). Turn it into one
+    structured plan with an absolute due the program can fire. Undated or trigger dues keep the text."""
+    t = tree["world_state"]["time"]
+    m0 = _DUE.match(str(t.get("date") or ""))
+    for kind in ("npcs", "factions"):
+        for rec in (tree.get(kind) or {}).values():
+            st = rec.get("state") if isinstance(rec, dict) else None
+            if not isinstance(st, dict) or "plan" not in st or isinstance(st["plan"], dict):
+                continue
+            plan = {"move": st.pop("plan")}
+            due = st.pop("due", None)
+            m = _DUE.match(str(due or ""))
+            if m and m0 and m.group(4):
+                days = (_dt.date(*map(int, m.groups()[:3])) - _dt.date(*map(int, m0.groups()[:3]))).days
+                plan["due_day"] = t["day_index"] + days
+                plan["due_clock"] = int(m.group(4)) * 60 + int(m.group(5))
+                if m.group(6):
+                    plan["then"] = m.group(6)
+            elif due:
+                plan["trigger"] = str(due)
+            rec["plan"] = plan
+
+
 class World:
     def __init__(self, tree: dict, round_no: int = 0):
         self.tree = tree
         self.round = round_no
+        _normalize_plans(tree)
 
     # ----- reading -----
     def get(self, path: str, default=None):
@@ -109,7 +137,7 @@ class World:
         for kind in ("npcs", "factions"):
             for rid, rec in (self.tree.get(kind) or {}).items():
                 p = rec.get("plan") if isinstance(rec, dict) else None
-                if isinstance(p, dict) and (p["due_day"], p["due_clock"]) <= now:
+                if isinstance(p, dict) and "due_day" in p and (p["due_day"], p["due_clock"]) <= now:
                     out.append(((p["due_day"], p["due_clock"]), f"{kind}.{rid}", p))
         return [(path, p) for _, path, p in sorted(out, key=lambda x: x[0])]
 
@@ -166,3 +194,12 @@ class World:
             s[key] = s.get(key, 0) + gain
             credited.append(skill)
         return gain
+
+    # ----- what is here, for the prompts -----
+    def location(self) -> dict:
+        return self.tree.get("locations", {}).get(self.tree["world_state"]["location"], {})
+
+    def actors_here(self) -> dict[str, dict]:
+        here = self.tree["world_state"]["location"]
+        return {rid: r for rid, r in (self.tree.get("npcs") or {}).items()
+                if isinstance(r, dict) and (r.get("state") or {}).get("position") == here}

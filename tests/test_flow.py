@@ -27,11 +27,12 @@ def test_ai_cannot_write_owned_paths():
 
 def test_plan_gets_absolute_due_and_fires_in_order():
     w = world()
+    assert w.tree["npcs"]["edda_pryce"]["plan"]["due_clock"] == 1020      # BACKGROUND's "17:00" became a real due
     w.apply({"op": "plan", "path": "npcs.hobb_marren", "value": "opens the shutters", "due_in_minutes": 90})
     w.apply({"op": "plan", "path": "npcs.tobias_wren", "value": "leaves", "due_in_minutes": 30})
     assert w.due() == []
     w.advance(100)
-    assert [p for p, _ in w.due()] == ["npcs.tobias_wren", "npcs.hobb_marren"]
+    assert [p for p, _ in w.due()] == ["npcs.tobias_wren", "npcs.edda_pryce", "npcs.hobb_marren"]
 
 
 def test_fast_turn_is_sort_tell_audit_only():

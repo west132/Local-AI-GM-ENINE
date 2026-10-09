@@ -1,6 +1,6 @@
 """Runs a turn exactly as engine/steps.yaml says. The AI fills a form; the program executes it."""
 from __future__ import annotations
-import json, pathlib
+import json, pathlib, re
 import yaml
 
 from . import combat, mechanics as M, schema
@@ -40,12 +40,33 @@ def brief(world: World) -> str:
     return "\n".join(out)
 
 
+def scene(world: World, secret: bool) -> str:
+    """The place and who is in it. `secret` adds what only the simulator may know (drives, knowledge)."""
+    t = world.tree
+    loc = world.location()
+    out = [f"PLACE: {loc.get('name', t['world_state']['location'])} — {json.dumps(loc.get('conditions', {}), ensure_ascii=False)}",
+           f"WEATHER/ENVIRONMENT: {json.dumps(t['world_state'].get('environment', {}), ensure_ascii=False)}",
+           f"TIME: {world.time.get('date', '')} {world.time['clock_minutes'] // 60:02d}:{world.time['clock_minutes'] % 60:02d}, {world.time['daypart']}"]
+    for rid, r in world.actors_here().items():
+        keys = ("name", "job", "gender", "character", "appearance") + (("drives", "relationships", "knowledge", "plan") if secret else ())
+        shown = {k: r[k] for k in keys if k in r}
+        shown["doing"] = (r.get("state") or {}).get("status")
+        out.append(f"PERSON {rid}: {json.dumps(shown, ensure_ascii=False)}")
+    others = [f"{rid}: {r.get('name')} ({(r.get('state') or {}).get('status', '')})" for rid, r in (t.get("npcs") or {}).items()
+              if rid not in world.actors_here()]
+    if others:
+        out.append("ELSEWHERE (not present): " + "; ".join(others))
+    return "\n".join(out)
+
+
 def inputs(step: dict, turn: Turn) -> str:
     w, parts = turn.world, []
     for name in step["input"]:
         if name == "player_text":
             parts.append(f"PLAYER: {turn.text}")
-        elif name in ("place", "records_in_play", "actors_present"):
+        elif name in ("place", "actors_present"):
+            parts.append(scene(w, secret=step["id"] != "tell"))
+        elif name == "records_in_play":
             parts.append(brief(w))
         elif name == "player_state":
             p = w.player
@@ -62,8 +83,10 @@ def inputs(step: dict, turn: Turn) -> str:
             parts.append("TEXT TO CHECK:\n" + turn.prose)
         elif name == "dues_fired":
             parts.append("DUE NOW: " + json.dumps([{"who": p_, **pl} for p_, pl in w.due()], ensure_ascii=False))
-        elif name == "time":
-            parts.append(f"TIME: day {w.time['day_index']} {w.time['clock_minutes']} min")
+        elif name in ("time", "pressures", "plan", "morale_norms"):
+            pass     # time is inside the scene; pressures and norms are added when those records exist
+        else:
+            raise KeyError(f"step {step['id']}: unknown input {name!r}")
     return "\n\n".join(parts)
 
 
@@ -140,12 +163,16 @@ def do_apply(turn: Turn, out: dict) -> list[str]:
     return refused
 
 
+def clean(prose: str) -> str:
+    return re.sub(r"^```\w*\s*|\s*```$", "", prose.strip()).strip()
+
+
 def run_turn(world: World, llm, text: str) -> Turn:
     turn = Turn(world, text)
     steps = {s["id"]: s for s in load_steps()}
     turn.sort = run_step(llm, steps["sort"], turn)
     turn.ran.append("sort")
-    todo = [s for s in turn.sort["steps"] if s in steps]
+    todo = [s for s in ("judge", "fight", "react", "quest") if s in turn.sort["steps"]]   # fixed order, once each
     for sid in todo:
         out = run_step(llm, steps[sid], turn)
         turn.ran.append(sid)
@@ -167,10 +194,10 @@ def run_turn(world: World, llm, text: str) -> Turn:
                 apply_ops(world, again["ops"])
     if turn.sort.get("note"):
         turn.facts.append(turn.sort["note"])
-    turn.prose = run_step(llm, steps["tell"], turn)
+    turn.prose = clean(run_step(llm, steps["tell"], turn))
     verdict = run_step(llm, steps["audit"], turn)
     if not verdict["ok"]:
         turn.facts.append("FIX IN THE RETELLING: " + "; ".join(verdict.get("problems", [])))
-        turn.prose = run_step(llm, steps["tell"], turn)
+        turn.prose = clean(run_step(llm, steps["tell"], turn))
     world.round += 1
     return turn
