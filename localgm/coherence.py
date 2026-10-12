@@ -96,6 +96,8 @@ def check_step(before: World, after: World, events: list[dict] | None = None) ->
 
 
 def _program_owned(path: str) -> bool:
+    if path.startswith(("world_state.material_history",)) or path.endswith((".xp_awarded", ".clock.due_at", ".clock.filled")):
+        return True            # written by the program: XP payouts and clock bookkeeping
     from .state import _OWNED
     return any(p.match(path) for p in _OWNED) or path.startswith(("player.condition", "player.growth_period", "player.skills", "player.item_points"))\
         or ".plan" in path or path.endswith((".temper", ".work_source"))

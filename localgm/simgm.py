@@ -16,6 +16,10 @@ def _form(system: str) -> str:
     return system.split("REPLY with one JSON object only:")[1].lstrip() if "REPLY with one JSON object only:" in system else ""
 
 
+def _second_pass(user: str) -> bool:
+    return "ALREADY DONE AND RECORDED" in user
+
+
 def _line(user: str, prefix: str) -> str:
     m = re.search(r"^" + re.escape(prefix) + r"(.*)$", user, re.M)
     return m.group(1).strip() if m else ""
@@ -31,9 +35,14 @@ def _people(user: str) -> dict[str, str]:
     return out
 
 
-def _places(user: str) -> list[str]:
+def _places(user: str) -> dict[str, str]:
+    """id -> name, from the line 'PLACES (...): id = Name; id = Name'."""
     m = re.search(r"^PLACES \([^)]*\): (.*)$", user, re.M)
-    return [p.strip() for p in m.group(1).split(",")] if m else []
+    out = {}
+    for part in (m.group(1).split("; ") if m else []):
+        pid, _, name = part.partition(" = ")
+        out[pid.strip()] = name.strip() or pid.strip()
+    return out
 
 
 def _here(user: str) -> str:
@@ -46,13 +55,20 @@ def _addressed(text: str, people: dict[str, str]) -> list[str]:
     return [i for i, n in people.items() if any(len(w) >= 3 and re.search(r"\b" + re.escape(w) + r"\b", low) for w in n.lower().split())]
 
 
-def _named_place(text: str, places: list[str], here: str) -> str | None:
+def _named_place(text: str, places: dict[str, str], here: str) -> str | None:
+    """The place whose name the player's words match best (most of its name's words), if at least two words match."""
     low = text.lower()
     words = set(re.findall(r"[a-z]{4,}", low))
-    for pid in places:
-        if pid != here and (pid.replace("_", " ") in low or len(set(re.findall(r"[a-z]{4,}", pid.replace("_", " "))) & words) >= 2):
-            return pid
-    return None
+    best, score = None, 0.0
+    for pid, name in places.items():
+        if pid == here:
+            continue
+        nw = set(re.findall(r"[a-z]{4,}", name.lower()))
+        hit = len(nw & words)
+        sc = 9 if pid.replace("_", " ") in low else (hit / len(nw) if hit >= 2 else 0)
+        if sc > score:
+            best, score = pid, sc
+    return best
 
 
 def _results(user: str) -> list[tuple[str, str, str]]:
@@ -72,6 +88,11 @@ class SimGM:
         self.calls = []
 
     def ask(self, system, user, schema=None, max_tokens=None):
+        props = (schema or {}).get("properties", {})
+        for field, key in (("title", "premise"), ("groups", "economy"), ("source_abilities", "player"),     # the world-making forms
+                           ("start_location", "places"), ("npcs", "cast"), ("quests", "story")):
+            if field in props and field in (schema.get("required") or []) and key in GOOD:
+                return copy.deepcopy(GOOD[key])
         form = _form(system)
         if not form:
             kind = "epilogue" if "## 21" in system else "tell"
@@ -131,11 +152,13 @@ class SimGM:
         return {"asks": []}
 
     def do_react(self, user):
-        text = _line(user, "PLAYER: ")
+        second = _second_pass(user)
+        text = "" if second else _line(user, "PLAYER: ")             # on the second pass the action is done; only the dues are left
         people, places, here = _people(user), _places(user), _here(user)
         res = _results(user)
         addressed = _addressed(text, people)
-        out = {"asks": [], "minutes": 60 if re.search(r"hour|wait|rest|sleep", text, re.I) else 10, "ops": []}
+        out = {"asks": [], "ops": [], "minutes": 1440 if re.search(r"\bday\b", text, re.I) else 480 if re.search(r"sleep|night", text, re.I)
+               else 60 if re.search(r"hour|wait|rest", text, re.I) else 10}
         ops, who = [], addressed[:1]
         merged = "RESULTS" in user and not res and who and "dues" not in user.lower()[:0]
         if who and not res and not self._asked:
@@ -237,7 +260,7 @@ PLAYER = {"name": "Kell Ardane", "age": 26, "origin": "Cinder Vale", "history": 
           "job": "warden", "belongs": ["Toll Wardens"], "gender": "man", "character": "Steady, dry-humoured, hates debt.", "status": "well", "starting_activity": "Standing at the toll gate at dawn.",
           "skills": [{"id": "swordwork", "class": "ELITE", "tier": "T2", "class_source": "six years of road fights", "abilities": ["Parry Strike"]},
                      {"id": "ember_touch", "class": "NORMAL", "tier": "T1", "class_source": "awakened last year", "abilities": []}],
-          "traits": ["stubborn"], "established": ["road fighting"], "limitations": ["no letters"], "level": 4, "hp": 40, "mp": 12,
+          "traits": ["stubborn"], "established": ["road fighting"], "limitations": ["no letters"], "level": 4,
           "equipment": [{"item_id": "short_sword", "name": "short sword", "type": "sword", "capability_domain": "melee", "condition": "worn", "tier": "T1", "price_ref": "short sword"},
                         {"item_id": "badge", "name": "warden badge", "type": "badge", "capability_domain": "authority", "condition": "serviceable", "tier": "T1", "price_ref": "personal"}],
           "money": 14, "item_points": 2, "item_points_basis": "ordinary professional", "knowledge": [{"key": "gate", "fact": "The east gate sticks."}],
@@ -257,7 +280,7 @@ CAST = {"npcs": [
      "position": "ash_pit", "plan": "track the wolves", "due": "2026-04-11 06:00 sets traps", "wants": ["safe roads"], "fears": ["a bad winter"], "values": ["patience"],
      "tie": "stranger", "attitude": "neutral", "level": 5}],
     "factions": [{"id": "toll_wardens", "name": "Toll Wardens", "role": "road law", "wants": ["tolls"], "fears": ["bandits"]}]}
-STORY = {"quests": [{"id": "clear_the_pit", "role": "MAIN", "type": "SHORT", "objective": "Find what is driving the wolves out of the Ash Pit.", "status": "active", "participants": ["ysolt_hale"]}],
+STORY = {"quests": [{"id": "clear_the_pit", "role": "MAIN", "type": "SHORT", "level": 3, "objective": "Find what is driving the wolves out of the Ash Pit.", "status": "active", "participants": ["ysolt_hale"]}],
          "pressures": [{"id": "wolf_spread", "name": "Wolves spread", "origin": "the pit", "actors": ["ysolt_hale"], "trajectory": "toward the road", "clock_name": "wolf raids",
                         "segments": 6, "pace": "every 3 days while the pit is unhunted", "first_check": "2026-04-13 06:00", "on_fill": "wolves raid the inn"}],
          "hidden": [{"id": "pit_cause", "cause": "A buried ember relic is waking.", "evidence": ["scorched stones"], "routes": ["follow the wolves", "ask the carters"]}],

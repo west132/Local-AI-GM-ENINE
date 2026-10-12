@@ -842,7 +842,7 @@ SKILLS   each skill: id, class (ceiling), tier (now), class_source (what earned 
 SOURCE   canon: source_abilities lists every ability the protagonist really has when the story begins, as the source game has it;
   each names the skill that holds it, and that skill's abilities list contains it. An ability the source gives only later is NOT here.
   Original world: source_abilities = [].
-LEVEL    1–20; the history must support it. hp is a starting value for that level; mp only if the character has an MP-drawing skill.
+LEVEL    1–20; the history must support it. The program derives hp and mp from the level; do not write them.
 EQUIPMENT  what they carry at the start. price_ref = the item's name in the price list, or "personal". Items the profession implies
   and the story does not forbid (phone, wallet, tools) are included.
 MONEY    a number in the world's currency, enough for about a week of the living costs unless the history says otherwise.
@@ -881,7 +881,7 @@ FACTIONS name, role, what they want and fear. Only groups that act in the story.
 ## 27. Making a world — what is going on
 
 ```text
-QUESTS    the player's first leads. At least one is MAIN. Every participant is a person id from the cast. Nobody must meet,
+QUESTS    the player's first leads. At least one is MAIN. type SHORT (one objective) or LONG (a longer job); `level` 1-20 says how hard it is, on the same scale as character levels (a first job for a level-4 character is about 2-5). Every participant is a person id from the cast. Nobody must meet,
   fight or help for a quest to be solvable.
 PRESSURES slow processes in the world that move whether or not the player acts: each has a clock (segments, pace
   "every <interval> while <condition>", first_check "YYYY-MM-DD HH:MM") sized to fit the whole span (a city-wide pressure moves in

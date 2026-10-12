@@ -416,12 +416,17 @@ class World:
         c = self.get(path + ".clock")
         if not isinstance(c, dict) or not c.get("due_at"):
             raise WriteRefused(f"{path} has no clock to check")
-        gain = (1 + (1 if extra else 0)) if operated else 0
+        step = int(c.get("interval_minutes") or 0)
+        due_abs = c["due_at"]["day"] * 1440 + c["due_at"]["clock"]
+        now_abs = self.time["day_index"] * 1440 + self.time["clock_minutes"]
+        # a long jump (a night's sleep, a day's wait) owes one check per interval that passed: the AI judges once whether the process
+        # operated over the whole span, and the program fills one segment for every interval of it
+        missed = max(1, (now_abs - due_abs) // step + 1) if step else 1
+        gain = (missed + (1 if extra else 0)) if operated else 0
         c["filled"] = min(int(c["segments"]), int(c.get("filled", 0)) + gain)
-        step = c.get("interval_minutes")
         if step and c["filled"] < c["segments"]:
-            total = c["due_at"]["clock"] + int(step)
-            c["due_at"] = {"day": c["due_at"]["day"] + total // 1440, "clock": total % 1440}
+            nxt = due_abs + missed * step
+            c["due_at"] = {"day": nxt // 1440, "clock": nxt % 1440}
         else:
             c.pop("due_at", None)            # full, or no regular pace: the AI sets the next check when it matters
         return {"filled": c["filled"], "segments": c["segments"], "full": c["filled"] >= c["segments"],

@@ -319,3 +319,97 @@ def test_every_ai_step_ends_its_message_with_a_task_and_the_sorter_sees_no_secre
         assert seen["user"].index("YOUR TASK NOW") >= len(flow.inputs(s, t)), s["id"]          # the task comes after every record the step shows
         if s["id"] == "sort":
             assert "drives" not in seen["user"] and "knowledge" not in seen["user"] and len(seen["system"]) < 9000
+
+
+# ---------- whole games: the parts working together ----------
+# A practice GM (localgm/simgm.py) that reads the real prompts plays whole games through the real loop, the real saves and the real world,
+# and after every turn the world must agree with itself (localgm/coherence.py).
+
+WORLDS = ["harbour_guesthouse", "ashfall_hunter", "tarnstead_low_fantasy", "last_scion_boundary", "cyberpunk_red_south_nc"]
+
+
+def _script(w):
+    from localgm import flow as F
+    people = [r["name"].split()[0] for r in w.actors_here().values()]
+    places = [(i, l["name"]) for i, l in w.tree["locations"].items() if i != w.tree["world_state"]["location"]]
+    text = ["I look around.", "What do I have?"]
+    if people:
+        text.append(f"I ask {people[0]} what is going on.")
+    text += ["I wait for an hour.", "I try to climb something nearby."]
+    if places:
+        text.append(f"I go to {places[0][1]}.")
+    text += ["I wait.", "I attack the creature.", "I sleep until morning.", "I wait for a day.", "I wait for a day.", "I wait for a day."]
+    return text, places[0][0] if places else None
+
+
+@pytest.mark.parametrize("name", WORLDS)
+def test_a_whole_game_keeps_the_world_in_agreement_with_itself(name, tmp_path):
+    import random
+    from localgm import coherence
+    from localgm.store import Game
+    random.seed(7)
+    g = Game.new(tmp_path, "g", (__import__("test_flow").ROOT / name / "background.md").read_text(encoding="utf-8"))
+    w = g.world
+    from localgm.simgm import SimGM
+    flow.intake(w, SimGM())
+    base = coherence.check(w)
+    assert base == [], base                                             # the start of every bundled world agrees with itself
+    texts, target = _script(w)
+    gm = SimGM()
+    for i, text in enumerate(texts, 1):
+        before = __import__("copy").deepcopy(w)
+        t = flow.run_turn(w, gm, text)
+        assert t.prose.strip() and "WHAT HAPPENED" not in t.prose, (text, t.prose)
+        found = coherence.check(w) + coherence.check_step(before, w)
+        assert found == [], (name, text, found)
+        if text.startswith("I go to") and target:
+            assert w.get("world_state.location") == target, (text, w.get("world_state.location"))
+        if i % 4 == 0:
+            g.save()
+            assert Game.open(tmp_path, "g").world.tree == w.tree                 # what is on disk is what is in memory
+    assert w.round == len(texts) and w.time["day_index"] >= 3                   # three days of waiting really passed, dues and clocks included
+
+
+def test_a_game_can_be_rewound_exported_imported_and_carried_on(tmp_path):
+    import random
+    from localgm import coherence, savefile
+    from localgm.simgm import SimGM
+    from localgm.store import Game
+    random.seed(3)
+    bg = (__import__("test_flow").ROOT / "ashfall_hunter" / "background.md").read_text(encoding="utf-8")
+    g = Game.new(tmp_path, "g", bg)
+    flow.intake(g.world, SimGM()); g.save()
+    gm = SimGM()
+    for text in ["I look around.", "I ask Nadia what is going on.", "I wait for an hour.", "I go to the Canal Street embankment relay huts.", "I wait."]:
+        flow.run_turn(g.world, gm, text); g.save()
+    assert g.world.get("world_state.location") == "canal_embankment"
+    snap2 = Game.open(tmp_path, "g"); snap2.rewind(2)
+    assert snap2.world.round == 2 and snap2.world.get("world_state.location") == "hale_workshop"          # back before the trip
+    flow.run_turn(snap2.world, gm, "I ask Nadia again.")                                                 # and the game goes on from there
+    assert snap2.world.round == 3 and coherence.check(snap2.world) == []
+    text = savefile.export_save(g.world, bg, "g")
+    w3, notes = savefile.import_save(text, bg)
+    assert w3.round == g.world.round and w3.get("world_state.location") == "canal_embankment"
+    flow.run_turn(w3, gm, "I wait for an hour.")
+    assert w3.round == g.world.round + 1 and coherence.check(w3) == []
+
+
+def test_a_made_world_and_an_imported_save_play_too(tmp_path):
+    import random
+    from localgm import coherence, generate, savefile
+    from localgm.simgm import SimGM
+    from localgm.state import World, background_tree
+    random.seed(5)
+    text, _ = generate.generate(SimGM(), "a grim road fantasy")
+    w = World(background_tree(text))
+    flow.intake(w, SimGM())
+    assert coherence.check(w) == [], coherence.check(w)
+    for line in ["I look around.", "I wait for a day.", "I go to the Ash Pit.", "I wait."]:
+        flow.run_turn(w, SimGM(), line)
+        assert coherence.check(w) == [], (line, coherence.check(w))
+    root = __import__("test_flow").ROOT
+    save = (pathlib.Path(__file__).resolve().parent / "data" / "ashfall_R10.md").read_text(encoding="utf-8")
+    w2, _ = savefile.import_save(save, (root / "ashfall_hunter" / "background.md").read_text(encoding="utf-8"))
+    for line in ["I look around.", "I wait for an hour.", "I sleep until morning."]:
+        flow.run_turn(w2, SimGM(), line)
+    assert w2.round == 13 and coherence.check(w2) == [], coherence.check(w2)

@@ -46,8 +46,8 @@ CPU speed: a 14B model on a CPU takes minutes per turn; a 7B is faster. The two 
 4. Each turn is several paid calls. Turn on the two call-saving switches if you want fewer.
 5. Test, Check. A refused key shows "the API key was refused".
 
-### D. Demo — `demo`
-No AI. The app answers with canned text so you can look at the pages, try saves, rewind, import and export. It is not a game.
+### D. Practice GM — `demo`
+No AI. A simple rule-based GM plays by reading the same prompts a model reads, so you can try the whole app (pages, dice, time, going to places, saves, rewind, import and export, Make a new world) without any model. It is plain and repetitive on purpose; it is not a real story.
 
 ## 4. Your first game
 Home → choose a world (`harbour_guesthouse` is the small safe one) → name the game → **Start**. Say what you do. The page shows lines such as `ask 2d10: 7+2 +1 = 10 → NO, BUT (…)` (the program's dice) and then the story.

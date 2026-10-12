@@ -76,3 +76,24 @@ Every AI call has the same shape, and the order matters because a model acts on 
 
 Nothing here depends on the size of the model: a clear task, only the relevant records, and the exact spelling of what must be written help every model, and a strong model
 simply has more room to be good inside it.
+
+## How the parts fit together
+
+**Where each thing lives (one place each).** `engine/steps.yaml`: the turn: for every step its rule sections, what the AI is shown, its task, its form and the program handler.
+`engine/rules.md`: all judgement rules, numbered sections. `engine/generate.yaml`: the six world-making forms. `localgm/flow.py` runs the turn; `rules.py`, `state.py`, `combat.py`, `clock.py`,
+`mechanics.py` hold the arithmetic and the records; `coherence.py` checks the whole world agrees with itself; `simgm.py` is a practice GM with no AI.
+
+**A turn, end to end.** player words → *sort* (note) → *judge* (verdict, roll set-up, asks) → program rolls / settles → *fight* → *wonder* → program answers → *react* (report, ops, time, move)
+→ program validates and commits all or nothing → dues that fell are decided in a second pass → *tell* (from the note / report / results) → *audit* → coherence check.
+Every arrow is a hand-off the program carries; nothing is passed by a model "remembering".
+
+**What keeps the parts honest together** (each one was added because a real run or test found the parts disagreeing):
+- the AI is shown exactly what it must cite or write: record paths, place ids *with names*, the player's state;
+- the second look of a turn (things that fell due while the action happened) is told the action is already done;
+- a long jump owes a check for every interval that passed, filled in the same turn (one decision from the AI, the program fills the segments);
+- the made-world generator writes only what the engine derives itself (it does not write hp), and everything the engine requires (a quest level);
+- `coherence.check` after every turn: the player is somewhere real, nobody has a plan that can never happen, nobody travelling with the player is left behind, no due or clock was missed,
+  hp and cash are in range, one MAIN quest, results point at records that exist; and between turns time only moves forward and every changed record has a cause on the journal.
+  Anything found is shown under the turn and kept in the journal.
+- whole games (all five bundled worlds, a made world, an imported chat save, rewind and export/import in the middle) are played through the real loop by the practice GM, and every turn
+  must leave the world in agreement with itself (`tests/test_loops.py`, "whole games").

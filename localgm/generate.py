@@ -130,8 +130,6 @@ def check_player(o: dict, ctx: dict) -> list[str]:
                 out.append(f"source ability {a['ability']!r}: skill {a['skill']!r} is not in skills")
             elif a["ability"].strip().lower() not in {x.strip().lower() for x in held["abilities"]}:
                 out.append(f"source ability {a['ability']!r} must also be listed in skills.{a['skill']}.abilities")
-    if prem["mp_powers"]["draws_mp"] and "mp" not in o:
-        out.append("this world has MP-drawing powers; give the character's starting mp (0 if they have none)")
     if o["money"] <= 0 and not o["history"]:
         out.append("money is 0 with no history to explain it")
     return out
@@ -261,7 +259,7 @@ def assemble(ctx: dict) -> str:
         player["vitality"] = _vitality(pl["level"])
     if mods["flexible_item_entitlement"]:
         player["starting_item_points"] = {"points": pl["item_points"], "basis": pl["item_points_basis"]}
-    player["condition"] = {"hp": pl["hp"], **({"mp": pl["mp"]} if "mp" in pl else {}), "injuries": [], "fatigue": "none", "last_rest": "recently"}
+    player["condition"] = {"injuries": [], "fatigue": "none", "last_rest": "recently"}        # hp and mp start at the maximum the program derives (below)
     player["equipment"] = [{"item_id": slug(e["item_id"] or e["name"]), "name": e["name"], "type": e["type"], "capability_domain": e["capability_domain"],
                             "condition": e["condition"], **({"tier": e["tier"]} if mods["equipment_power_tiers"] and e.get("tier") else {}),
                             "special_properties": e.get("special_properties", []), "abilities": e.get("abilities", [])} for e in pl["equipment"]]
@@ -281,8 +279,15 @@ def assemble(ctx: dict) -> str:
     factions = {slug(f["id"]): {"name": f["name"], "role": f["role"], "state": {}, "drives": {"wants": f["wants"], "fears": f["fears"]},
                                 "relationships": {}, "knowledge": {"facts": {}, "channels": []}, "capability": {}, "discovered_information": {}}
                 for f in cs["factions"]}
-    quests = {slug(q["id"]): {"role": q["role"], "type": q["type"], "objective": q["objective"], "status": q["status"],
-                              "participants": [slug(p) for p in q["participants"]], "support_refs": []} for q in st["quests"]}
+    quests = {}
+    for q in st["quests"]:
+        rec = {"role": q["role"], "type": q["type"], "objective": q["objective"], "status": q["status"],
+               "participants": [slug(p) for p in q["participants"]], "support_refs": []}
+        if mods["numeric_level_xp"] and q["type"] == "SHORT":
+            rec["quest_level"] = q["level"]
+        if q["type"] == "LONG":                      # a longer job: one first step the engine can pay out, more are added in play
+            rec["segments"] = {"first_step": {"objective": q["objective"], "segment_level": q["level"], "status": q["status"], "xp_awarded": 0}}
+        quests[slug(q["id"])] = rec
     pressures = {slug(p["id"]): {"name": p["name"], "origin": p["origin"], "state": {}, "actors": [slug(a) for a in p["actors"]],
                                  "trajectory": p["trajectory"],
                                  "clock": {"name": p["clock_name"], "segments": p["segments"], "filled": 0, "pace": p["pace"],
@@ -318,6 +323,12 @@ def assemble(ctx: dict) -> str:
     if pr["source_game"]:
         tree["requested"] = [f"set in {pr['source_game']}"]
     tree["requested"] = tree["requested"] or [ctx["idea"].strip()[:300]]
+    import copy
+    from .state import World as _W
+    probe = _W(copy.deepcopy(tree))
+    tree["player"]["condition"]["hp"] = R.hp_max(probe)
+    if R.mp_max(probe):
+        tree["player"]["condition"]["mp"] = R.mp_max(probe)
     head = f"# BACKGROUND — {pr['title']} v5.0\n\nGenerated from this idea: {ctx['idea'].strip()}\n\nFor `NEW ENGINE v5.0`. Round-0 truth. Provisional until play relies on it. GM-only.\n\n"
     return head + "```yaml\n" + yaml.safe_dump(tree, sort_keys=False, allow_unicode=True, width=110) + "```\n"
 

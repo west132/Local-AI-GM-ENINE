@@ -340,7 +340,7 @@ class H(BaseHTTPRequestHandler):
                 ms = backend.probe(probe.data["url"], probe.api_key())
                 return f"Connected. Models available: {', '.join(ms[:12]) or 'none loaded'}"
             if probe.data["backend"] == "demo":
-                return "Demo mode: no AI is used."
+                return "Practice GM: no AI is used."
             files = probe.ggufs()
             return f"Found {len(files)} model file(s): {', '.join(files)}" if files else "No .gguf file in the models folder yet."
         except Exception as e:
@@ -404,9 +404,9 @@ class H(BaseHTTPRequestHandler):
         def run():
             t = flow.run_turn(g.world, APP.model(), text, **APP.settings.turn_options())
             hdr = header(g.world)
-            g.log({"input": text, "sort": t.sort, "lines": t.lines, "facts": t.facts, "events": t.events, "prose": t.prose, "header": hdr})
+            g.log({"input": text, "sort": t.sort, "lines": t.lines, "facts": t.facts, "events": t.events, "prose": t.prose, "header": hdr, "warnings": t.warnings})
             g.save()
-            return {"html": turn_html(text, t.lines + [f"Cash: {' '.join(str(x) for x in g.world.cash() if x != '')}"], t.prose, hdr), "header": hdr}
+            return {"html": turn_html(text, t.lines + [f"Cash: {' '.join(str(x) for x in g.world.cash() if x != '')}"] + ["⚠ " + x for x in t.warnings], t.prose, hdr), "header": hdr}
         if not APP.start(name, "turn", run):
             return self.send(b"The AI is still working on the last turn.", 409, "text/plain")
         self.json({"started": True})

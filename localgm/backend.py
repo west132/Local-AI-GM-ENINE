@@ -1,7 +1,8 @@
 """Where the AI lives. Both backends expose ask(system, user, schema) -> dict | str."""
 from __future__ import annotations
-import copy
 import json, re, urllib.error, urllib.request
+
+from .simgm import SimGM
 
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 
@@ -94,31 +95,11 @@ class LlamaCpp:
         return _finish(out["choices"][0]["message"]["content"], schema)
 
 
-class Demo:
-    """Canned, valid replies: lets the app run end to end with no model at all."""
-    def ask(self, system, user, schema=None, max_tokens=None):
-        if schema is None:
-            return "(demo) " + user.split("PLAYER:")[-1].split("\n")[0].strip()[:120]
-        props = schema.get("properties", {})
-        from . import simgm as D
-        for field, key in (("title", "premise"), ("groups", "economy"), ("source_abilities", "player"),
-                           ("start_location", "places"), ("npcs", "cast"), ("quests", "story")):
-            if field in props and "required" in schema and field in schema["required"]:
-                return copy.deepcopy(D.GOOD[key])
-        if "kind" in props:
-            return {"kind": "fast", "steps": [], "note": "(demo) it simply happens."}
-        if "ok" in props:
-            return {"ok": True}
-        if "actors" in props:
-            return {"actors": []}
-        return {}
-
-
 def make(settings):
     """The backend the settings page chose."""
     d = settings.data
     if d["backend"] == "demo":
-        return Demo()
+        return SimGM()
     if d["backend"] == "server":
         return OpenAICompat(d["url"], d["model"], d["temperature"], d["max_tokens"], api_key=settings.api_key())
     if d["backend"] == "api":

@@ -26,7 +26,12 @@ def test_a_capable_model_passes_every_check():
 
 
 def test_a_model_that_cannot_fill_the_forms_is_told_so_with_reasons():
-    res = modelcheck.run(backend.Demo())
+    class Junk:
+        def ask(self, system, user, schema=None, max_tokens=None):
+            if schema is None:
+                return "ok"
+            raise ValueError("not json")
+    res = modelcheck.run(Junk())
     assert res["passed"] < 5 and "Good" not in res["verdict"]
     assert all(r["note"] for r in res["rows"]) and any("no usable reply" in r["note"] for r in res["rows"])
 

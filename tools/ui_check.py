@@ -48,9 +48,9 @@ try:
         pg.click("button:text('Save')")
         check("temperature" in pg.inner_text("body") and json.loads((tmp / "settings.json").read_text())["temperature"] == 0.5, "a bad value is refused with a reason and the old value kept")
         pg.click("#test"); pg.wait_for_function("document.getElementById('t').textContent.length>3")
-        check("Demo mode" in pg.inner_text("#t"), "Test the AI button answers")
+        check("Practice GM" in pg.inner_text("#t"), "Test the AI button answers")
         pg.click("#check"); pg.wait_for_function("document.getElementById('chk').innerText.includes('Tells the scene')", timeout=60000)
-        check("/7" in pg.inner_text("#t") and "Weak" in pg.inner_text("#t") or "Not capable" in pg.inner_text("#t") or "Usable" in pg.inner_text("#t"),
+        check("/7" in pg.inner_text("#t") and "Weak" in pg.inner_text("#t") or "Not capable" in pg.inner_text("#t") or "Usable" in pg.inner_text("#t") or "Good" in pg.inner_text("#t"),
               "Check this model runs and shows a verdict with a row per step")
         pg.click("text=Back to Home")
         check(pg.url.rstrip("/").endswith("8799"), "Back to Home works from Settings")
@@ -61,7 +61,7 @@ try:
         check("/play/g1" in pg.url, "new game opens the play page")
         pg.fill("#in", "I look around the inn."); pg.click("#go")
         pg.wait_for_selector(".prose")
-        check("(demo) I look around" in pg.inner_text("#log"), "a turn runs and the reply appears")
+        check("You wait a breath to see what comes next" in pg.inner_text("#log"), "a turn runs and the reply appears")
         check("R1" in pg.inner_text("#hdr"), "header shows round 1")
         pg.click("nav >> text=Home")
         check(pg.locator("text=g1").count() > 0 and "round 1" in pg.inner_text("body"), "Home lists the game with its round")

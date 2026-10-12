@@ -107,7 +107,7 @@ stages:
     max_tokens: 3500
     output:
       type: object
-      required: [name, age, origin, history, appearance, archetype, job, belongs, gender, character, status, starting_activity, skills, traits, established, limitations, level, hp, equipment, money, item_points, item_points_basis, knowledge, source_abilities]
+      required: [name, age, origin, history, appearance, archetype, job, belongs, gender, character, status, starting_activity, skills, traits, established, limitations, level, equipment, money, item_points, item_points_basis, knowledge, source_abilities]
       properties:
         name: {type: string, minLength: 3}
         age: {type: integer, minimum: 1}
@@ -137,8 +137,6 @@ stages:
         established: {type: array, items: {type: string}}
         limitations: {type: array, items: {type: string}}
         level: {type: integer, minimum: 1, maximum: 20}
-        hp: {type: integer, minimum: 1}
-        mp: {type: integer, minimum: 0}
         equipment:
           type: array
           items:
@@ -245,11 +243,12 @@ stages:
           minItems: 1
           items:
             type: object
-            required: [id, role, type, objective, status, participants]
+            required: [id, role, type, level, objective, status, participants]
             properties:
               id: {type: string}
               role: {type: string, enum: [MAIN, SIDE]}
-              type: {type: string, enum: [SHORT, LONG, CHAIN]}
+              type: {type: string, enum: [SHORT, LONG]}       # SHORT = one objective; LONG = a longer job done in steps
+              level: {type: integer, minimum: 1, maximum: 20}   # how hard the quest is, on the same 1-20 scale as character levels
               objective: {type: string, minLength: 10}
               status: {type: string, enum: [available, active]}
               participants: {type: array, items: {type: string}}

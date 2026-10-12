@@ -8,7 +8,7 @@ import json, os, pathlib, re, sys, time
 from types import SimpleNamespace
 import yaml
 
-from . import combat, mechanics as M, rules, schema
+from . import coherence, combat, mechanics as M, rules, schema
 from .state import World, WriteRefused, at_minutes, dates_in
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent / "engine"
@@ -68,6 +68,7 @@ class Turn:
         self.fills: list[str] = []      # clocks that just filled; resolved in the same turn
         self.dues_pass = 1
         self.in_fight = False
+        self.warnings: list[str] = []   # what the whole-world check found wrong after the turn (shown to the player, kept in the journal)
         self.final = False              # the handler is running on the AI's last allowed attempt
         self.rolled = 0                 # questions the dice settled this turn
         self.settled = 0                # questions the records settled (no dice)
@@ -103,7 +104,7 @@ def brief(world: World) -> str:
                 fields = ",".join(k for k, v in rec.items() if v not in (None, "", [], {}) and k not in ("name",))[:70]
                 out.append(f"{kind}.{rid} — {rec.get('name', rid)}: {str(what)[:90]}  [{fields}]")
     if t.get("locations"):
-        out.append("PLACES (ids for locations.<id> and for moved_to): " + ", ".join(t["locations"]))
+        out.append("PLACES (use the id for locations.<id> and for moved_to): " + "; ".join(f"{i} = {l.get('name', i)}" for i, l in t["locations"].items() if isinstance(l, dict)))
     out.append("YOUR PLAYER'S OWN RECORD: player.skills, player.equipment, player.condition, player.money, player.knowledge")
     return "\n".join(out)
 
@@ -166,7 +167,11 @@ def inputs(step: dict, turn: Turn) -> str:
             parts.append(f"THE PLAYER CHARACTER (\"you\" in the telling): {ident.get('name', 'the player')}, {w.player.get('job') or w.player.get('archetype') or ''}. "
                          f"{w.player.get('character', '')} Every other name is someone else; they are not \"you\".".replace("  ", " "))
         elif name == "player_text":
-            parts.append(f"PLAYER: {turn.text}")
+            if turn.dues_pass == 2:          # the second look of a turn: time passed during the action and things fell due
+                parts.append(f"PLAYER (ALREADY DONE AND RECORDED, see RESULTS; do not repeat it, do not move the player again): {turn.text}\n"
+                             "This pass is only for what fell due while it happened: decide the DUE NOW items and nothing else.")
+            else:
+                parts.append(f"PLAYER: {turn.text}")
         elif name in ("place", "actors_present"):
             if not scene_done:               # the place and who is in it are shown once, however many names ask for them
                 parts.append(scene(w, secret=step["id"] not in ("tell", "audit", "sort")))     # sorting needs who is here, not their secrets
@@ -830,7 +835,8 @@ def execute(llm, step: dict, turn: Turn):
     if step.get("optional"):                 # a check or a recap: the turn stands without it
         turn.facts.append(f"(Step {step['id']} could not be recorded; narrate none of its changes.)")
         return
-    raise TurnFailed(f"The AI could not give a usable answer for the '{step['id']}' step after two tries ({extra.strip().splitlines()[0][:200]}). "
+    refusal = " ".join(extra.strip().split())[:420]
+    raise TurnFailed(f"The AI could not give a usable answer for the '{step['id']}' step after two tries ({refusal}). "
                      "Nothing was recorded and the round did not advance; send the action again.")
 
 
@@ -919,5 +925,6 @@ def run_turn(world: World, llm, text: str, merge_questions: bool = False, check_
                 execute(llm, byid["tell"], turn)
             break
     work.round += 1
+    turn.warnings = coherence.check(work) + coherence.check_step(world, work, turn.events)      # does the whole world still agree with itself?
     world.tree, world.round = work.tree, work.round
     return turn

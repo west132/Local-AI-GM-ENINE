@@ -82,7 +82,7 @@ class Settings:
         """(level, text) for Home: good | usable | weak | none."""
         c = self.data.get("last_check")
         if self.data["backend"] == "demo":
-            return "demo", "Demo mode: no AI is used."
+            return "demo", "Practice GM: no AI is used."
         if not c or c.get("for") != self.fingerprint():
             return "none", "This AI has not been checked yet. Settings → Check this model."
         level = "good" if c["passed"] == c["total"] else "usable" if c["passed"] >= c["total"] - 2 else "weak"
