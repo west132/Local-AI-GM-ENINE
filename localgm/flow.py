@@ -265,6 +265,7 @@ def _run_step(llm, step: dict, turn: Turn, extra: str = ""):
         if isinstance(out, dict) and out.get("asks") and "asks" in sch.get("properties", {}):      # asking first: nothing is decided yet, so nothing is required
             out.setdefault("minutes", 0)
             out.setdefault("ops", [])
+            out.setdefault("report", "")
         errs = schema.validate(out, sch)
         if not errs:
             return out

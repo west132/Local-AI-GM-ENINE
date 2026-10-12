@@ -16,7 +16,7 @@ defs:
       properties:
         question:   {type: string, description: "yes/no, ending in ?"}
         obvious:    {type: string, description: "the obvious answer if one exists, as 'YES - why' or 'NO - why' (nothing is rolled); otherwise exactly 'none'"}
-        likelihood: {type: integer, minimum: -3, maximum: 3}
+        likelihood: {type: integer, minimum: -3, maximum: 3, description: "-3..+3 from the records; any value other than 0 needs `for` (or `against`) stating the fact behind it, in a few words"}
         for:        {type: string}
         against:    {type: string}
         cites:      {type: array, items: {type: string}, description: "record paths behind the question; they must exist"}
@@ -100,7 +100,7 @@ turn:
       - roll: it could honestly go either way and it depends on the PLAYER'S OWN skill or luck (a lock, a climb, a chase). Fill `roll`: subject, capability, base,
         skill, and stakes: what success and failure each mean, and harm (none, setback, loss, severe).
       - ask: it depends on what a PERSON decides or knows (will she show it? does he agree?). verdict ask, and `asks`: yes/no questions ending in "?".
-        For each: obvious = "YES - why" or "NO - why" when the records already settle it (nothing is rolled), else "none".
+        For each: obvious = "YES - why" or "NO - why" when the records already settle it (nothing is rolled), else "none"; a likelihood other than 0 needs `for`/`against` (the fact behind it).
       - If the action has a real cost, danger or irreversible step that the player's own orders do not answer, fill `decision` (the question and 2-5 options with their costs).
       Never roll something another person decides. Never decide the result of a roll yourself.
       Reply with the JSON object only.
@@ -198,8 +198,8 @@ turn:
     task: |
       List the yes/no questions about what PEOPLE decide, know or do that the records do NOT settle and that matter for this action.
       Each question: ends in "?"; obvious = "YES - why" or "NO - why" if the records settle it (then nothing is rolled), otherwise "none";
-      likelihood -3..+3 from the records (never from what the player needs); cites = exact record paths. No question about the player's own actions.
-      If nothing is open, reply {"asks": []}. Example: {"asks":[{"question":"Does the smith agree to mend the sword today?","obvious":"none","likelihood":1,"cites":["npcs.smith.drives"]}]}
+      likelihood -3..+3 from the records (never from what the player needs). If likelihood is not 0 you MUST fill `for` (or `against`) with the fact behind it, e.g. "for": "he runs a guesthouse and has rooms". cites = exact record paths. No question about the player's own actions.
+      If nothing is open, reply {"asks": []}. Example: {"asks":[{"question":"Does the smith agree to mend the sword today?","obvious":"none","likelihood":1,"for":"his shop is open and he mends swords","cites":["npcs.smith.drives"]}]}
       Reply with the JSON object only.
     input: [place, actors_present, player_brief, records_in_play, dues_fired, player_text, results_so_far, resolved_facts]
     output:
@@ -217,7 +217,7 @@ turn:
     rules: [01_jobs, 02_directive, 11_actors, 12_world, 19_play_lessons]
     task: |
       Say what happens in the world because of the player's action and the RESULTS above. Every person acts from their own record, not from what the player wants.
-      1. If you still need an answer first, fill `asks` (yes/no questions ending in "?", each with obvious/likelihood/cites) and leave the rest empty.
+      1. If you still need an answer first, fill `asks` (yes/no questions ending in "?", each with obvious, likelihood, `for`/`against` = the fact behind a non-zero likelihood, and cites) and leave the rest empty.
       2. Otherwise fill: `report` (plain sentences: who did what and why, only what the player can see, hear or learn), `minutes`, and `ops`:
          each change with its exact path (see RECORDS YOU CAN CITE), `because`, `channel` if a person learns something, and `requires` {on, answer} on any path a RESULT governs.
          Add money, rest, heal, moved_to and the other typed fields only if that happened. Do not repeat a change that is already recorded.
@@ -226,7 +226,7 @@ turn:
     input: [place, actors_present, player_brief, records_in_play, dues_fired, pressures, player_text, results_so_far, resolved_facts]
     output:
       type: object
-      required: [minutes, ops]
+      required: [report, minutes, ops]
       properties:
         asks:
           type: array
