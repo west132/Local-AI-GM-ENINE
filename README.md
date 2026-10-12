@@ -14,7 +14,7 @@ You can run the AI three ways with the same game: a model file inside the app (o
    - **gguf** — a model file in the `models` folder, run inside this app. Pick the file, choose *cpu* or *auto*, press **Save**.
    - **server** — LM Studio or Ollama. Load a model there, start its server, enter the address, press **Test the AI**.
    - **api** — an online service. Enter its address, model name and API key, press **Save**, then **Test the AI**.
-   - **demo** — no AI; only to look around.
+   - **demo** — a plain rule-based practice GM, no AI: plays the whole app (dice, time, going places, saves, Make a new world) so you can try everything without a model.
 4. Press **Check this model** (a few short calls). Home shows the result, and asks before you start a game on an AI that was not checked or did badly.
 5. **Home** → pick a world, name your game, **Start**. Or **Make a new world** from a short idea, or **Continue from a save file**.
 
