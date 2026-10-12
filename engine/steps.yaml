@@ -414,9 +414,12 @@ turn:
     when: "not turn.halt"
     rules: [15_telling_it]
     task: |
-      Write what the player sees and hears now: a short scene of about 80-200 words, present tense, second person ("you"). Tell what happens from THE GM'S DECISION / WHAT HAPPENED and the RESULTS above;
-      people speak in their own voices (quoted dialogue); add the place's atmosphere. Stop where the player must decide. Do not repeat the player's words, do not add an event, a fact or a reward that is not above,
-      do not use labels, lists or headings. Reply with the scene text only.
+      Write what the player sees and hears now: a short scene of about 80-200 words, present tense, second person ("you"), as plain flowing prose.
+      Tell what happened from the true facts above, which are for you only: never copy their wording or any label from them. People speak in their own voices (quoted dialogue);
+      add the place's atmosphere. Stop where the player must decide.
+      Never write the player's own words or choices: the player said only what the PLAYER line says, so do not put new quotes in your character's mouth ("you say ...", "you ask ...").
+      No headings, no bold, no speaker names as titles, no lists, no script format. Do not repeat the player's words and do not add an event, a fact or a reward that is not above.
+      Reply with the scene text only.
     input: [player_who, place, facts_from_program, player_text]
     max_tokens: 500
     output: {type: string}
@@ -427,7 +430,7 @@ turn:
     when: "not turn.halt"
     rules: [03_invariants, 15_telling_it]
     task: |
-      Check TEXT TO CHECK against the FACTS and RESULTS. ok = false only if the text adds an event, fact or reward that is not in them, contradicts them, speaks or decides for the player, or reveals what the player has not learned.
+      Check TEXT TO CHECK against the facts under WHAT IS TRUE NOW. ok = false only if the text adds an event, fact or reward that is not in them, contradicts them, speaks or decides for the player, or reveals what the player has not learned.
       problems = each fault in a few words. Otherwise ok = true.
       Reply with the JSON object only.
     input: [player_who, place, prose, facts_from_program]

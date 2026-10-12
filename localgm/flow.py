@@ -766,6 +766,16 @@ def h_show(turn: Turn, out: str):
         if not turn.final:
             raise M.RuleError("your text contains the program's labels (THE GM'S DECISION, WHAT HAPPENED, RESULT…). Tell the scene itself, in your own words, without any label.")
         prose = clean(_LABELS.sub("", prose))
+    heads = re.compile(r"(?m)^\s*(?:#{1,6}\s+.*|\*\*[^*\n]{1,60}\*\*:?\s*|[A-Z][A-Za-z' ]{0,30}:\s*)$")
+    if heads.search(prose):                              # headings, bold speaker titles: a script, not a scene
+        if not turn.final:
+            raise M.RuleError("write the scene as plain prose: no headings, no bold titles, no speaker names as titles, no script format.")
+        prose = clean(heads.sub("", prose))
+    said = re.compile(r"[\"“]([^\"”]{4,})[\"”]\s*,?\s*you (?:say|ask|reply|answer|respond|whisper|call|shout|add)\b|\byou (?:say|ask|reply|answer|respond|whisper|call|shout|add)\b[^.\"“\n]{0,24}[,:]?\s*[\"“]([^\"”]{4,})[\"”]", re.I)
+    invented = [q for m in said.finditer(prose) for q in m.groups() if q and re.sub(r"\W+", " ", q).lower().strip() not in re.sub(r"\W+", " ", turn.text).lower()]
+    if invented and not turn.final:
+        raise M.RuleError(f"you wrote words for the player ({invented[0][:50]!r}). The player said only what the PLAYER line says; "
+                          "describe what you see and hear, and what the others say, and stop.")
     account = " ".join(f[len("WHAT HAPPENED:"):] for f in turn.facts if f.startswith("WHAT HAPPENED:"))
     norm = lambda x: re.sub(r"\W+", " ", x).lower().strip()
     if account.strip() and not turn.final and norm(account) in norm(prose) and len(prose.split()) < len(account.split()) + 12:

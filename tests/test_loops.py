@@ -413,3 +413,17 @@ def test_a_made_world_and_an_imported_save_play_too(tmp_path):
     for line in ["I look around.", "I wait for an hour.", "I sleep until morning."]:
         flow.run_turn(w2, SimGM(), line)
     assert w2.round == 13 and coherence.check(w2) == [], coherence.check(w2)
+
+
+def test_a_script_with_headings_and_words_written_for_the_player_is_sent_back():
+    w = world()
+    good = "Hobb looks up from the register and shakes his head. \"The big rooms are taken,\" he says, \"but the attic is free if you don't mind the stairs.\""
+    for bad in ("**THE GM'S DECISION**\n\nHobb looks up from the register.\n\n**YOU**\n\n\"Is there a room?\" you ask.",
+                "Hobb looks up. \"Is there a room for tonight?\" you ask, and he nods."):
+        t, bot = run(w, "I ask Hobb for a room", sort={"kind": "loop", "steps": ["react"]},
+                     react={"asks": [], "report": "Hobb offers the attic.", "minutes": 5, "ops": []}, tell=[bad, good])
+        assert bot.seen.count("tell") == 2 and t.prose == good, bad[:30]
+    # words the player really said may be quoted back
+    t, _ = run(w, 'I say "good evening" to Hobb', sort={"kind": "loop", "steps": ["react"]},
+               react={"asks": [], "report": "Hobb nods.", "minutes": 1, "ops": []}, tell='You say, "good evening," and Hobb nods without looking up from his book.')
+    assert "good evening" in t.prose
