@@ -340,7 +340,7 @@ def _vocab() -> set[str]:
     global _VOCAB
     if _VOCAB is None:
         import pathlib
-        text = " ".join(p.read_text(encoding="utf-8") for p in (pathlib.Path(__file__).resolve().parent.parent / "engine" / "rules").glob("*.md"))
+        text = (pathlib.Path(__file__).resolve().parent.parent / "engine" / "rules.md").read_text(encoding="utf-8")
         _VOCAB = set(re.findall(r"\b[a-z]+\b", text))
     return _VOCAB
 

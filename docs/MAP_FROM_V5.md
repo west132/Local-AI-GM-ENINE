@@ -1,6 +1,6 @@
 # Map from NEW ENGINE v5.0 to the local engine
 
-The local engine is `engine/steps.yaml` (the turn, in the form the program executes) plus `engine/rules/NN_*.md` (the judgement rules each step loads). Rule files have their own numbers (01–15). V5 numbers appear only in this file.
+The local engine is `engine/steps.yaml` (the turn, in the form the program executes) plus `engine/rules.md` (the judgement rules, numbered sections; each step loads the ones it names). Rule files have their own numbers (01–15). V5 numbers appear only in this file.
 Every V5 section ends up in exactly one of: **AI** (kept as a rule file loaded by a step), **CODE** (the program does it, the AI never sees it), **DROP** (existed only because V5 was written for a web chat).
 
 ## A. Local section → V5 source
@@ -64,14 +64,14 @@ Every V5 section ends up in exactly one of: **AI** (kept as a rule file loaded b
 ## B2. AI_RULES v5.0
 
 The first derivation left AI_RULES out except for language and narration. It holds the lessons added after models went wrong in play,
-including the dice rule ("decide the obvious; never roll to avoid being the one who said yes"). They are now `engine/rules/19_play_lessons.md`
+including the dice rule ("decide the obvious; never roll to avoid being the one who said yes"). They are now section 19 of `engine/rules.md`
 (the lines about judging and playing; tool, save and language lines are the program's), loaded by the sort, question, reaction and fight steps.
 
 ## C. Why this split
 
 Measured on the V5 engine text (token estimates, same method on every section):
 
-- AI-owned sections ≈ 11k tokens. These are engine/rules/.
+- AI-owned sections ≈ 11k tokens. These are engine/rules.md.
 - CODE sections ≈ 11k tokens. They stop being prompt text and become program logic.
 - DROP ≈ 1k tokens.
 

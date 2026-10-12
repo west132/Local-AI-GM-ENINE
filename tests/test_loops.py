@@ -301,9 +301,9 @@ def test_a_fight_against_a_bystander_who_was_never_attacked_is_sent_back():
 
 def test_every_ai_step_ends_its_message_with_a_task_and_the_sorter_sees_no_secrets():
     w = world("ashfall_hunter")
-    tasks = flow.load_tasks()
     steps = [s for s in flow.load_steps() if s.get("ai") is not False]
-    assert {s["id"] for s in steps} <= set(tasks), {s["id"] for s in steps} - set(tasks)
+    assert all(len(s.get("task", "")) > 40 for s in steps), [s["id"] for s in steps if len(s.get("task", "")) <= 40]
+    tasks = {s["id"]: s["task"] for s in steps}
     seen = {}
     class Spy:
         def ask(self, system, user, schema=None, max_tokens=None):

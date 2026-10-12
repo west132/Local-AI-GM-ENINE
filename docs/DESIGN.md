@@ -66,11 +66,11 @@ calls that need it, and a turn the program could not record is dropped, never na
 
 Every AI call has the same shape, and the order matters because a model acts on what it reads last:
 
-1. **System**: only the rule files that step needs to judge by (`engine/steps.yaml`, `rules:`), then the exact form to fill (`REPLY with one JSON object only: …`).
+1. **System**: only the rule files that step needs to judge by (`engine/steps.yaml`, `rules:` → sections of `engine/rules.md`), then the exact form to fill (`REPLY with one JSON object only: …`).
    The sorter, for example, gets 3 rule files, not the whole rulebook.
 2. **Records**: only what that step needs. The sorter sees who is here and what they are doing, not their secrets; the judge, the question step and the world step also see the
    exact record paths they may cite or write, the place ids, and the player's own state.
-3. **YOUR TASK NOW** (`engine/tasks.yaml`): what to do in this call, in a few short lines, with the options spelled out and one example from another game. This is the last thing
+3. **YOUR TASK NOW** (the step's `task:` in `engine/steps.yaml`): what to do in this call, in a few short lines, with the options spelled out and one example from another game. This is the last thing
    the model reads before it answers.
 4. On a retry, what the program refused and why.
 

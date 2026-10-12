@@ -78,7 +78,7 @@ def test_the_generator_can_make_a_world_with_its_own_calendar():
     f = Cal()
     with pytest.raises(ValueError, match="real date in the calendar"):
         G.generate(f, "x")
-    from localgm.demo_forms import CAST, STORY
+    from localgm.simgm import CAST, STORY
     fixed_cast = copy.deepcopy(CAST)
     fixed_cast["npcs"][0]["due"] = "Year 318, Floodmonth 7 09:00 opens the taproom"
     fixed_cast["npcs"][2]["due"] = "Year 318, Floodmonth 8 06:00 sets traps"

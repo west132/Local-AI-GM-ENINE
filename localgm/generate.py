@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt, json, pathlib, re, yaml
 
 from . import clock, rules as R, schema
+from .flow import rules_text
 from .state import World, background_tree, _ISO_DUE
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent / "engine"
@@ -202,7 +203,7 @@ def _show(ctx: dict, names: list[str]) -> str:
 
 def fill(llm, stage: dict, idea: str, ctx: dict, tries: int = 3) -> dict:
     sch = stage["output"]
-    system = "\n\n".join((ENGINE / "rules" / f"{r}.md").read_text(encoding="utf-8") for r in stage["rules"])
+    system = rules_text(stage["rules"])
     system += "\n\nREPLY with one JSON object only:\n" + schema.render(sch)
     user = f"IDEA FROM THE PERSON:\n{idea.strip()}\n\n" + (_show(ctx, stage.get("input", [])) if stage.get("input") else "")
     faults: list[str] = []

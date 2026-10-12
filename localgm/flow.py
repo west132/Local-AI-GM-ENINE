@@ -28,22 +28,29 @@ def load_steps() -> list[dict]:
     return _yaml()["turn"]
 
 
-_TASKS = None
-
-
-def load_tasks() -> dict:
-    global _TASKS
-    if _TASKS is None:
-        _TASKS = yaml.safe_load((ENGINE / "tasks.yaml").read_text(encoding="utf-8"))
-    return _TASKS
-
-
 def load_intake() -> dict:
     return _yaml()["intake"]
 
 
+_RULES = None
+
+
+def rules_sections() -> dict[int, str]:
+    """engine/rules.md is one file: sections '## N. Title'. A step names the sections it loads as '05_player_side' (= section 5)."""
+    global _RULES
+    if _RULES is None:
+        text = (ENGINE / "rules.md").read_text(encoding="utf-8")
+        parts = re.split(r"(?m)^(?=## \d+\. )", text)
+        _RULES = {int(re.match(r"## (\d+)\.", x).group(1)): x.rstrip() + "\n" for x in parts if re.match(r"## \d+\. ", x)}
+    return _RULES
+
+
 def rules_text(names: list[str]) -> str:
-    return "\n\n".join((ENGINE / "rules" / f"{n}.md").read_text(encoding="utf-8") for n in names)
+    secs = rules_sections()
+    try:
+        return "\n\n".join(secs[int(n.split("_")[0])] for n in names)
+    except (KeyError, ValueError) as e:
+        raise KeyError(f"rules section {e} is not in engine/rules.md") from None
 
 
 class Turn:
@@ -236,7 +243,7 @@ def run_step(llm, step: dict, turn: Turn, extra: str = ""):
 
 def _run_step(llm, step: dict, turn: Turn, extra: str = ""):
     sch, errs = schema.cap_arrays(step["output"]), []
-    task = load_tasks().get(step["id"], "").strip()
+    task = str(step.get("task") or "").strip()
     task = ("\n\nYOUR TASK NOW:\n" + task) if task else ""       # the instruction comes last, after the records
     system = rules_text(step["rules"])
     if sch.get("type") != "string":

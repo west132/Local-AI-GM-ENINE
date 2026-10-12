@@ -38,15 +38,14 @@ A BACKGROUND writes every date as `YYYY-MM-DD`, or defines its own calendar as a
 
 ## How it works
 `engine/steps.yaml` is the turn in the form the program executes: sort → (confirm) → judge → fight → ask → react → offer → quest → injury → ending → ten-round check → tell → check → recap.
-Each step says what the AI sees, the form it must fill in, and what the program does with it. `engine/rules/` holds the judgement rules each step loads.
+Each step says what the AI sees, the form it must fill in, and what the program does with it. `engine/rules.md` is the one file of judgement rules (numbered sections); each step names the sections it loads, and carries its own task, inputs and form.
 The program passes every decision from one AI call to the next, and a turn it cannot record is dropped whole (nothing kept, the round does not advance).
 
 | Read | For |
 |---|---|
 | `docs/INSTALL.md` | installing and running with each kind of AI; troubleshooting |
 | `docs/DESIGN.md` | the authority order, calendars, how decisions are handed between AI calls |
-| `docs/STATUS.md` | every V5 rule: implemented, partial or not yet, and the test that shows it |
-| `docs/PROJECT_SUMMARY.md` | what was built, what the runs showed, what is not tested |
+| `docs/STATUS.md` | where the project stands (what was built, what the runs showed, what is not tested), then every V5 rule: implemented, partial or not yet, and the test that shows it |
 | `docs/MAP_FROM_V5.md` | where each part of NEW ENGINE v5.0 went |
 | `docs/runs/` | recorded Ashfall test runs (raw calls and transcripts) |
 
@@ -58,5 +57,5 @@ python tools/audit_flows.py     # every step, rule file and form field is wired 
 python tools/ui_check.py        # clicks through the app in a real browser (needs: playwright install chromium)
 python tools/install_check.py   # installs into a clean folder and fresh venv, then starts the app
 ```
-In the app, **Check this model** tells you whether *your* AI can fill the engine's forms. Honest limits are listed in `docs/STATUS.md` and `docs/PROJECT_SUMMARY.md`:
+In the app, **Check this model** tells you whether *your* AI can fill the engine's forms. Honest limits are listed in `docs/STATUS.md`:
 only a strong model has played a full ten-round game so far, and Windows `start.bat` has not been run on Windows.

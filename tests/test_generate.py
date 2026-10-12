@@ -5,7 +5,7 @@ from localgm import generate as G
 from localgm.state import World, background_tree
 from localgm.store import Game
 
-from localgm.demo_forms import PREMISE, ECONOMY, PLAYER, PLACES, CAST, STORY, GOOD
+from localgm.simgm import PREMISE, ECONOMY, PLAYER, PLACES, CAST, STORY, GOOD
 
 
 class Forms:

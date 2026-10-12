@@ -100,7 +100,7 @@ class Demo:
         if schema is None:
             return "(demo) " + user.split("PLAYER:")[-1].split("\n")[0].strip()[:120]
         props = schema.get("properties", {})
-        from . import demo_forms as D
+        from . import simgm as D
         for field, key in (("title", "premise"), ("groups", "economy"), ("source_abilities", "player"),
                            ("start_location", "places"), ("npcs", "cast"), ("quests", "story")):
             if field in props and "required" in schema and field in schema["required"]:

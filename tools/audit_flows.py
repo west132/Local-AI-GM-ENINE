@@ -10,7 +10,7 @@ E = ROOT / "engine"
 steps = flow.load_steps()
 intake = flow.load_intake()
 src = {p.name: p.read_text(encoding="utf-8") for p in (ROOT / "localgm").glob("*.py")}
-code = "\n".join(v for k, v in src.items() if k not in ("generate.py", "demo_forms.py"))
+code = "\n".join(v for k, v in src.items() if k not in ("generate.py", "simgm.py"))
 findings = []
 
 def bad(msg): findings.append(msg); print("FINDING:", msg)
@@ -22,8 +22,8 @@ for s in steps + [intake]:
     if s["program"] not in flow.HANDLERS and s["program"] != "set_dues":
         bad(f"step {s['id']}: handler {s['program']!r} does not exist")
     for r in s.get("rules", []):
-        if not (E / "rules" / f"{r}.md").exists():
-            bad(f"step {s['id']}: rule file {r} is missing")
+        if int(r.split("_")[0]) not in flow.rules_sections():
+            bad(f"step {s['id']}: rules section {r} is not in engine/rules.md")
     if s["id"] != "intake":
         flow._when(s["when"], t)
     if s.get("ai") is not False and s["id"] != "intake":
@@ -39,8 +39,8 @@ for h in flow.HANDLERS:
 import yaml
 gen = yaml.safe_load((E / "generate.yaml").read_text(encoding="utf-8"))["stages"]
 used_r = {r for s in steps + [intake] + gen for r in s.get("rules", [])}
-for p in sorted((E / "rules").glob("*.md")):
-    if p.stem not in used_r: bad(f"rule file {p.name} is loaded by no step")
+for n in sorted(flow.rules_sections()):
+    if not any(int(r.split("_")[0]) == n for r in used_r): bad(f"rules section {n} is loaded by no step")
 
 # 3. sort.steps enum = the steps that wait for the sorter's word
 gated = set(re.findall(r"'(\w+)' in sort\.steps", " ".join(s["when"] for s in steps)))
@@ -65,6 +65,6 @@ for s in steps + [intake]:
         if not re.search(r"""["']%s["']|\.%s\b""" % (f, f), code):
             bad(f"step {s['id']}: field {f!r} is never read by the program")
 
-print(f"\n{len(steps)} turn steps + intake, {len(list((E/'rules').glob('*.md')))} rule files, {len(flow.HANDLERS)} handlers checked: "
+print(f"\n{len(steps)} turn steps + intake, {len(flow.rules_sections())} rule sections, {len(flow.HANDLERS)} handlers checked: "
       + ("ALL WIRED" if not findings else f"{len(findings)} FINDINGS"))
 sys.exit(1 if findings else 0)

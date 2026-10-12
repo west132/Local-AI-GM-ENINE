@@ -54,7 +54,7 @@ def test_the_yaml_is_the_whole_workflow():
         flow._when(s["when"], t)                        # every condition evaluates
         if s.get("ai") is not False:
             for r in s["rules"]:
-                assert (flow.ENGINE / "rules" / f"{r}.md").exists()
+                assert int(r.split("_")[0]) in flow.rules_sections(), r
             flow.inputs(s, t)                           # every input name is known
     ids = [s["id"] for s in steps]
     assert ids.index("judge") < ids.index("wonder") < ids.index("react") < ids.index("tell")   # roll before consequence
