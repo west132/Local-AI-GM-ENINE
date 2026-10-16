@@ -46,9 +46,20 @@ def single_step() -> dict:
     return _CACHE["single"]
 
 
+def _shared(step: dict) -> dict:
+    """The same step with the one-form turn's rules first. Every call of a one-form turn then starts with the same system text, so a model
+    server or library that keeps the start of the last prompt reads the rules once, not once per call."""
+    base = single_step()["rules"]
+    return {**step, "rules": base + [r for r in step["rules"] if r not in base]}
+
+
 def single_steps() -> list[dict]:
     """The turn when the AI answers in one form: the form, then the same checkpoint, re-reading and epilogue as the step-by-step turn."""
-    return [single_step()] + [s for s in load_steps() if s["id"] in ("checkpoint", "audit", "epilogue")]
+    return [single_step()] + [_shared(s) for s in load_steps() if s["id"] in ("checkpoint", "audit", "epilogue")]
+
+
+def single_retell() -> dict:
+    return _shared(next(s for s in load_steps() if s["id"] == "tell"))
 
 
 _RULES = None
@@ -1041,7 +1052,7 @@ def run_turn(world: World, llm, text: str, merge_questions: bool = False, check_
     work = world.clone()
     turn = Turn(work, text)
     steps = single_steps() if style == "one" else load_steps()
-    byid = {s["id"]: s for s in load_steps()}
+    byid = {s["id"]: s for s in (single_steps() + [single_retell()] if style == "one" else load_steps())}
     skip = ({"wonder"} if merge_questions else set()) | (set() if check_telling else {"audit"})
     for step in steps:
         if step["id"] in skip or not _when(step["when"], turn):

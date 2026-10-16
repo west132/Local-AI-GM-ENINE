@@ -85,7 +85,7 @@ simply has more room to be good inside it.
   For the other modes the program does its part (rolls, answers, fights, stops for the player) and asks the same form again with the results under RESULTS, so a turn is one call, two when dice or a person's answer are needed
   (a new offer's shape and a due that fell during the action can add one more). A `done` reply is checked as a whole *before anything is recorded*: the telling (labels, headings, words put in the player's mouth, secrets),
   the report, the typed fields, the ops against the ledger and the owned paths; if any part fails the AI is sent back with the reason and nothing was kept. At most three rolls, questions or fights per turn, then it must decide.
-  The prompt carries the rules (about 14,000 tokens) in the system text, which is the same for every call, so a server that caches the start of the prompt only reads it once; this needs a context of at least 24,576 tokens (32,768 recommended).
+  The prompt carries the rules (about 14,000 tokens) first in the system text, and every call of the turn (also the re-reading, the ten-round check, the recap and a retelling) starts with that same text, so a server or library that keeps the start of the last prompt reads it once, not once per call; this needs a context of at least 24,576 tokens (32,768 recommended).
   The last five exchanges (the player's line and what the AI told, shortened) are kept in the save as `recent_turns` and shown as THE STORY JUST NOW. They are the AI's continuity, not part of a save file (export leaves them out), and the AI cannot write them.
 - **steps**: `turn:` in the same file, the older pipeline (sort, judge, fight, wonder, react, offer, quest, injury, ending, tell, audit): shorter prompts, more calls.
 

@@ -623,3 +623,12 @@ def test_a_whole_game_in_the_one_form_style(name, tmp_path):
             g.save()
             assert Game.open(tmp_path, "g").world.tree == w.tree
     assert w.round == len(texts) and w.time["day_index"] >= 3 and {"roll", "fight", "done"} <= seen, seen
+
+
+def test_every_call_of_a_one_form_turn_starts_with_the_same_system_text():
+    w = world()
+    w.round = 9                                                                      # this turn closes a tenth round: the ten-round check runs too
+    t, llm = one(w, [gm_done(), {"ops": [], "notes": []}, {"ok": False, "problems": ["adds a reward"]}, "Hobb looks up from the register and nods once, and the lamp hisses over the desk while the sea breathes outside the window.", OK])
+    assert t.ran == ["gm", "checkpoint", "audit"] and len(llm.seen) == 4
+    rules = flow.rules_text(flow.single_step()["rules"])
+    assert all(system.startswith(rules) for system, _ in llm.seen) and len(rules) > 40000      # the rules once, first, in every call: a cache can keep them
