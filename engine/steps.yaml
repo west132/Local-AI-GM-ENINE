@@ -108,7 +108,7 @@ turn:
     output:
       type: object
       required: [verdict, cites]
-      properties:
+      properties: &judge_props
         verdict:  {type: string, enum: [certain, impossible, roll, ask]}
         reason:   {type: string}
         asks:
@@ -160,7 +160,7 @@ turn:
     output:
       type: object
       required: [exchanges]
-      properties:
+      properties: &fight_props
         foes:
           type: array
           description: "opponents not yet in the records; the program adds them"
@@ -227,7 +227,7 @@ turn:
     output:
       type: object
       required: [report, minutes, ops]
-      properties:
+      properties: &react_props
         asks:
           type: array
           description: "ONLY if you need another result before you can decide: ask here and leave minutes/ops empty; the program answers and asks you again. Empty when you are ready to decide."
@@ -452,3 +452,53 @@ turn:
     max_tokens: 700
     output: {type: string}
     program: epilogue
+
+# THE ONE-FORM TURN. The same turn as above, asked as one form: the AI is the GM and answers the player in one reply.
+# Most actions are settled in that one call (mode done). When dice or a person's answer are needed the reply says so (mode roll / ask / fight),
+# the program rolls, and the AI is asked again with the results: two calls. Everything after the reply (rolls, arithmetic, time, saves,
+# validation, the hidden-truth filter) is the same program as in the step-by-step turn. flow.single_steps() builds the step from these parts.
+single:
+  id: gm
+  when: always
+  rules: [01_jobs, 02_directive, 03_invariants, 04_truth, 05_player_side, 07_possible, 08_roll_setup, 09_stakes, 10_fights, 11_actors, 12_world,
+          13_quests, 14_endings, 15_telling_it, 17_injury, 18_offer, 19_play_lessons]
+  input: [player_who, place, player_brief, records_in_play, pressures, dues_fired, active_quests, pending, ending_conditions, recent, player_text, results_so_far, resolved_facts]
+  max_tokens: 2500
+  task: |
+    You are the GM. Answer the player's action (the PLAYER line) with ONE form. First choose `mode`:
+    - done: the action can be settled now from the records. Most actions are. Fill report, minutes and ops (and moved_to, money, rest and the other typed fields only if that happened), then `scene`.
+    - roll: it depends on the PLAYER'S OWN skill or luck and could honestly go either way (a lock, a climb, a chase). Fill `roll`: subject, capability, base, skill, stakes (what success and failure each mean, and harm). The program rolls and asks you again with the result.
+    - ask: it depends on what a PERSON decides or knows and the records do not settle it. Fill `asks`: yes/no questions ending in "?"; obvious = "YES - why" or "NO - why" when the records already settle it, else "none"; a likelihood other than 0 needs `for` or `against` (the fact behind it); cites = exact record paths. The program answers and asks you again.
+    - fight: the player attacks someone. Fill foes (only opponents not yet in the records), exchanges, kill. The program fights and asks you again.
+    - decision: the action has a real cost, danger or irreversible step that the player's own orders do not answer: fill `decision` (the question and 2-5 options with their costs). Nothing happens yet.
+    - confirm: ONLY if "WAITING FOR THE PLAYER'S GO-AHEAD" is shown above and the player agrees to exactly that.
+    Rules for the choice: never roll something another person decides; never decide the result of a roll yourself; if RESULTS are shown above they are already decided: use mode done, never overrule a result, record what follows from it.
+    In mode done:
+    - cites: exact record paths (see RECORDS YOU CAN CITE). If the records rule the action out, set `blocked` to the reason, leave ops empty and cite what rules it out; the scene then tells the player it does not work.
+    - ops: each change with its exact path, `because`, `channel` if a person learns something, and `requires` {on, answer} on any path a RESULT governs. Every person acts from their own record, not from what the player wants. Do not repeat a change that is already recorded.
+    - report: plain sentences, who did what and why, only what the player could see, hear or learn.
+    - scene: what the player sees and hears now, 80-200 words, present tense, second person ("you"), plain flowing prose, told from the true facts of this reply. People speak in their own voices (quoted dialogue); add the place's atmosphere; stop where the player must decide.
+      Never write the player's own words or choices (no new quotes for the player, no "you say ..."). No headings, no bold, no speaker names as titles, no lists. Do not repeat the player's words and add no event, fact or reward that is not in your report, ops or the RESULTS.
+    - injury: only if RESULTS say a lasting injury follows: name it, say where it acts (home) and exactly what changes (effect).
+    - new_offer: true only when this action made a genuinely new job, lead or promise available (most actions: false). The program then rolls its shape and asks you again to write it.
+    Reply with the JSON object only.
+  output:
+    type: object
+    required: [mode]
+    properties:
+      <<: [*react_props, *judge_props, *fight_props]
+      mode:    {type: string, enum: [done, roll, ask, fight, decision, confirm], description: "what this reply is; most actions are done"}
+      asks:
+        type: array
+        description: "mode ask only"
+        items: *askitem
+      report:  {type: string, description: "mode done: what happened in the world during this action, in plain sentences: who did what and why, only what the player could see, hear or learn"}
+      minutes: {type: integer, minimum: 0, description: "mode done: believable duration of what happened"}
+      blocked: {type: string, description: "mode done: why the action cannot happen, if the records rule it out (then no ops; cite what rules it out)"}
+      new_offer: {type: boolean, description: "mode done: true if this action made a genuinely new job, lead or promise available"}
+      injury:  {type: object, required: [injury, home, effect], description: "mode done, only when RESULTS say a lasting injury follows",
+                properties: {injury: {type: string}, home: {type: string, enum: [capability, feasibility, environment, time, sensory, position, simultaneous]}, effect: {type: string}}}
+      ending:  {type: object, required: [met, closed], description: "mode done, only when ending conditions are shown: ids now met and ids now permanently out of reach",
+                properties: {met: {type: array, items: {type: string}}, closed: {type: array, items: {type: string}}}}
+      scene:   {type: string, description: "mode done: what the player sees and hears now (80-200 words of plain prose)"}
+  program: gm

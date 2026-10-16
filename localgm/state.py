@@ -13,7 +13,7 @@ from . import clock, mechanics as M
 # AI may not write under these prefixes (program-owned)
 OWNED = (r"round", r"world_state\.time", r"player\.condition\.(hp|mp)", r"player\.money",
          r"player\.resources", r"player\.progression", r"player\.skills\.[^.]+\.(class|tier|growth_evidence|ceiling_evidence)",
-         r"trackers", r"journal", r"pending", r"player\.item_points", r"player\.growth_period",
+         r"trackers", r"journal", r"pending", r"recent_turns", r"player\.item_points", r"player\.growth_period",
          r"ending_conditions", r"ending_state", r"resolved",
          r"npcs\.[^.]+\.capability\.(tracked|overall_level|xp)", r"(npcs|factions)\.[^.]+\.(work_source|temper)", r"calendar")
 _OWNED = [re.compile(p + r"(\.|$)") for p in OWNED]

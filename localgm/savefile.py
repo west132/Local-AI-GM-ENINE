@@ -165,7 +165,7 @@ def export_save(world: World, background_text: str, name: str = "game") -> str:
     base = World(background_tree(background_text)).tree
     changes: list[tuple[str, object]] = []
     for k, v in t.items():
-        if k in ("player", "enabled_modules", "narrative_theme"):
+        if k in ("player", "enabled_modules", "narrative_theme", "recent_turns"):
             continue
         if k == "world_state":
             for kk, vv in v.items():

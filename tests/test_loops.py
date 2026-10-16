@@ -427,3 +427,199 @@ def test_a_script_with_headings_and_words_written_for_the_player_is_sent_back():
     t, _ = run(w, 'I say "good evening" to Hobb', sort={"kind": "loop", "steps": ["react"]},
                react={"asks": [], "report": "Hobb nods.", "minutes": 1, "ops": []}, tell='You say, "good evening," and Hobb nods without looking up from his book.')
     assert "good evening" in t.prose
+
+
+# ---------- the one-form turn: the AI answers in one reply; dice and answers cost a second reply ----------
+
+SCENE = "Hobb looks up from the register, wipes his hands on his apron and nods slowly. The lamp over the desk hisses; somewhere upstairs a floorboard creaks and goes quiet again."
+
+
+def gm_done(**kw):
+    return {"mode": "done", "cites": ["npcs.hobb_marren"], "report": "Hobb nods and lets it be.", "minutes": 5, "ops": [], "scene": SCENE, **kw}
+
+
+def one(w, replies, text="I look around.", **kw):
+    llm = __import__("test_flow").Scripted(replies)
+    t = flow.run_turn(w, llm, text, style="one", **kw)
+    return t, llm
+
+
+def test_an_ordinary_action_is_one_call_and_one_audit():
+    w = world()
+    t, llm = one(w, [gm_done(), OK])
+    assert len(llm.seen) == 2 and t.ran == ["gm", "audit"] and t.prose == SCENE and w.round == 1
+    assert any("WHAT HAPPENED: Hobb nods" in f for f in t.facts) and t.sort == {"kind": "gm", "steps": ["done"]}
+    t, llm = one(w, [gm_done()], check_telling=False)
+    assert len(llm.seen) == 1                                           # the re-reading can be switched off: one call for a whole turn
+
+
+def test_the_one_form_system_text_is_the_rules_and_the_form_and_the_task_comes_last():
+    w = world()
+    _, llm = one(w, [gm_done(), OK], "I ask Hobb for a room")
+    system, user = llm.seen[0]
+    assert "## 11. People and factions" in system and "mode: string one of done/roll/ask/fight/decision/confirm" in system
+    form = system.split("REPLY with one JSON object only:")[1]
+    assert form.lstrip().startswith("mode:") and form.index("\nscene") > form.index("\nops")      # the choice first, the telling last
+    assert user.rstrip().splitlines()[-1] == "Reply with the JSON object only." and "YOUR TASK NOW:" in user and "PLAYER: I ask Hobb for a room" in user
+    assert "npcs.hobb_marren" in user and "PLACES (use the id" in user
+
+
+def test_a_roll_costs_a_second_call_and_the_program_rolls(monkeypatch):
+    force_check(monkeypatch, False)
+    w = world()
+    roll = {"mode": "roll", "cites": ["player"], "roll": {"subject": "climb_the_wall", "capability": 0, "base": 10,
+                                                          "stakes": {"success": "you reach the sill", "failure": "you slip and lose a minute", "harm": "setback"}}}
+    t, llm = one(w, [roll, gm_done(report="You slip and lose a minute."), OK], "I climb the wall")
+    assert t.sort["steps"] == ["roll", "done"] and any("Outcome: Failure" in l for l in t.lines)
+    assert "RESULT roll FAILURE: you slip and lose a minute" in llm.seen[1][1]           # the second call is told the result
+    assert "RESULT roll FAILURE" in llm.seen[1][1].split("RESULTS", 1)[1]
+
+
+def test_a_person_s_answer_is_asked_then_rolled_by_the_program_and_the_world_is_bound_to_it():
+    w = world()
+    ask = {"mode": "ask", "cites": ["npcs.hobb_marren"], "asks": [{"question": "Does Hobb let the player have a room?", "obvious": "YES - he runs the guesthouse and has rooms", "likelihood": 0,
+                                                                  "cites": ["npcs.hobb_marren"], "governs": ["npcs.hobb_marren.state.status"]}]}
+    done = gm_done(ops=[{"op": "set", "path": "npcs.hobb_marren.state.status", "value": "shows the player to a room", "because": "he agreed",
+                         "requires": {"on": "Does Hobb let the player have a room?", "answer": "YES"}}])
+    t, llm = one(w, [ask, done, OK], "I ask Hobb for a room")
+    assert t.sort["steps"] == ["ask", "done"] and w.get("npcs.hobb_marren.state.status") == "shows the player to a room"
+    bad = gm_done(ops=[{"op": "set", "path": "npcs.hobb_marren.state.status", "value": "throws the player out", "because": "x",
+                        "requires": {"on": "Does Hobb let the player have a room?", "answer": "NO"}}])
+    w2 = world()
+    t, llm = one(w2, [ask, bad, done, OK], "I ask Hobb for a room")
+    assert "refused" in llm.seen[2][1] and w2.get("npcs.hobb_marren.state.status") == "shows the player to a room"        # the contradiction was sent back
+
+
+def test_a_decision_stops_the_turn_and_nothing_is_recorded():
+    w = world()
+    dec = {"mode": "decision", "decision": {"question": "The constable will see you if you pay the fine now. What do you do?", "options": ["Pay 5 silver", "Refuse and leave"]}}
+    t, llm = one(w, [dec], "I walk out past the constable")
+    assert t.halt and "1. Pay 5 silver" in t.prose and len(llm.seen) == 1 and w.tree.get("pending") is None and w.round == 1
+
+
+def test_a_risky_roll_stops_at_the_odds_and_a_yes_goes_ahead(monkeypatch):
+    force_check(monkeypatch, True)
+    w = world()
+    roll = {"mode": "roll", "cites": ["player"], "roll": {"subject": "jump_the_gap", "capability": -4, "base": 18,
+                                                          "stakes": {"success": "you clear the gap", "failure": "you fall", "harm": "setback"}}}
+    t, llm = one(w, [roll], "I jump the gap")
+    assert t.halt and w.tree["pending"] and "Do you go ahead?" in t.prose and len(llm.seen) == 1
+    t, llm = one(w, [{"mode": "confirm"}, gm_done(report="You clear the gap."), OK], "yes")
+    assert t.sort["steps"] == ["confirm", "done"] and "pending" not in w.tree and any("Outcome: Success" in l for l in t.lines)
+
+
+def test_other_words_drop_the_pending_roll(monkeypatch):
+    w = world()
+    w.tree["pending"] = {"roll": {}, "ask": "x", "action": "x"}
+    t, _ = one(w, [gm_done(), OK], "never mind, I sit down")
+    assert "pending" not in w.tree and any("dropped" in f for f in t.facts)
+
+
+def test_only_three_side_calls_then_the_ai_must_decide():
+    w = world()
+    ask = {"mode": "ask", "asks": [{"question": "Does Hobb nod?", "obvious": "YES - he always nods", "likelihood": 0}]}
+    llm = __import__("test_flow").Scripted([ask, ask, ask, ask, gm_done(), OK])
+    t = flow.run_turn(w, llm, "I ask Hobb", style="one")
+    assert "no more rolls" in llm.seen[4][1] and t.prose == SCENE and w.round == 1
+
+
+def test_a_reply_that_cannot_be_recorded_changes_nothing_and_the_retry_is_told_why():
+    w = world()
+    before = __import__("copy").deepcopy(w.tree)
+    bad = gm_done(ops=[{"op": "set", "path": "world_state.time.date", "value": "2031-01-01", "because": "x"}])
+    t, llm = one(w, [bad, gm_done(), OK])
+    assert "nothing was recorded" in llm.seen[1][1] and t.prose == SCENE
+    with pytest.raises(flow.TurnFailed):
+        one(world(), [bad, bad])
+
+
+def test_a_telling_that_names_a_secret_or_a_label_is_sent_back_before_anything_is_recorded():
+    w = world()
+    bad = gm_done(scene="WHAT HAPPENED: Hobb looks at you and says nothing for a long moment, then goes back to his ledger and the sound of the sea.",
+                  ops=[{"op": "set", "path": "npcs.hobb_marren.state.status", "value": "watches the player", "because": "wary"}])
+    t, llm = one(w, [bad, gm_done(), OK])
+    assert "labels" in llm.seen[1][1] and w.get("npcs.hobb_marren.state.status") != "watches the player" and t.prose == SCENE
+    inv = gm_done(scene="You say, \"Give me a room, Hobb, I have money.\" Hobb looks at the coins and says nothing while the lamp hisses over the register.")
+    t, llm = one(world(), [inv, gm_done(), OK], "I look around.")
+    assert "words for the player" in llm.seen[1][1]
+
+
+def test_a_blocked_action_records_nothing_and_a_reply_without_a_scene_or_report_is_refused():
+    w = world()
+    t, llm = one(w, [gm_done(blocked="the records show no such item", cites=["player"], ops=[{"op": "set", "path": "player.knowledge.x", "value": 1}]),
+                     gm_done(blocked="the records show no such item", cites=["player"], report="Nothing happens; there is no such item."), OK], "I fire the cannon")
+    assert "leave ops empty" in llm.seen[1][1] and any("IMPOSSIBLE" in f for f in t.facts)
+    _, llm = one(world(), [{"mode": "done", "minutes": 5, "report": "x happened here."}, gm_done(), OK])
+    assert "scene" in llm.seen[1][1]
+    _, llm = one(world(), [gm_done(report=""), gm_done(), OK])
+    assert "report" in llm.seen[1][1]
+
+
+def test_a_lasting_injury_is_named_in_the_same_reply_and_recorded(monkeypatch):
+    force_check(monkeypatch, False)
+    w = world(); w.player["condition"]["hp"] = 2
+    roll = {"mode": "roll", "cites": ["player"], "roll": {"subject": "cross_the_blade_trap", "capability": 0, "base": 10, "committed": True,
+                                                          "stakes": {"success": "you cross", "failure": "you are cut", "harm": "severe", "source": "man-sized"}}}
+    t, llm = one(w, [roll, gm_done(), gm_done(injury={"injury": "a torn arm", "home": "capability", "effect": "the right arm cannot lift much"}), OK], "I cross the trap")
+    assert "lasting injury follows" in llm.seen[2][1] and w.player["condition"]["injuries"][0]["injury"] == "a torn arm" and t.injury_owed == 0
+
+
+def test_a_new_offer_rolls_its_shape_and_the_quest_must_have_it(monkeypatch):
+    monkeypatch.setattr(M, "roll", lambda n, s, rng=None: [3] if s == 10 else [1])
+    w = world()
+    quest = {"op": "set", "path": "quests.cellar_rats", "value": {"role": "SIDE", "type": "SHORT", "level": 1, "objective": "Clear the cellar of rats.", "status": "available", "participants": ["hobb_marren"]}, "because": "Hobb offered"}
+    t, llm = one(w, [gm_done(new_offer=True), gm_done(new_offer=True, ops=[{**quest, "value": {**quest["value"], "type": "LONG"}}]), gm_done(ops=[quest]), OK], "I ask Hobb if he has work")
+    assert "offer shape 1d10: 3 → SHORT" in " ".join(t.lines) and "the rolled shape is SHORT" in llm.seen[2][1] and "cellar_rats" in w.tree["quests"] and t.sort["steps"] == ["offer", "done"]
+
+
+def test_things_that_fall_due_during_the_action_get_a_second_reply_whose_scene_tells_all_of_it():
+    w = world()
+    w.set_dues("npcs.hobb_marren", [{"day_offset": 0, "at": "17:00", "what": "locks the front door"}], [])
+    first = gm_done(minutes=120, scene="You sit on the stairs and let the time go by, listening to the street below the window. " * 2)
+    second = gm_done(minutes=0, report="Hobb locks the front door.", ops=[{"op": "set", "path": "npcs.hobb_marren.state.status", "value": "locks up", "because": "his routine"}],
+                     scene="You sit on the stairs while the time goes by. At five the key turns in the front door below and Hobb's slippers shuffle off toward the kitchen.")
+    t, llm = one(w, [first, second, OK], "I wait for two hours.")
+    assert "ALREADY DONE" in llm.seen[1][1] and "WHOLE action" in llm.seen[1][1] and "key turns" in t.prose and "let the time go by" not in t.prose and w.round == 1
+
+
+def test_the_story_just_now_is_kept_and_shown_in_the_next_call():
+    w = world()
+    one(w, [gm_done(), OK], "I thank Hobb.")
+    _, llm = one(w, [gm_done(), OK], "I ask about the stairs.")
+    assert "THE STORY JUST NOW" in llm.seen[0][1] and "The player did: I thank Hobb." in llm.seen[0][1] and "wipes his hands" in llm.seen[0][1]
+    for i in range(6):
+        one(w, [gm_done(), OK], f"turn {i}")
+    assert len(w.tree["recent_turns"]) == flow.REMEMBER
+    assert w.commit([{"op": "set", "path": "recent_turns", "value": []}])           # the AI cannot rewrite the memory: the write is refused
+
+
+def test_a_retelling_after_a_failed_audit_uses_the_old_telling_step():
+    w = world()
+    t, llm = one(w, [gm_done(), {"ok": False, "problems": ["adds a reward"]}, "Hobb looks up from the register and nods once, and the lamp hisses over the desk while the sea breathes outside the window.", OK])
+    assert "reward" in llm.seen[2][1] and t.prose.startswith("Hobb looks up")
+
+
+@pytest.mark.parametrize("name", WORLDS)
+def test_a_whole_game_in_the_one_form_style(name, tmp_path):
+    import random
+    from localgm import coherence
+    from localgm.store import Game
+    from localgm.simgm import SimGM
+    random.seed(7)
+    g = Game.new(tmp_path, "g", (__import__("test_flow").ROOT / name / "background.md").read_text(encoding="utf-8"))
+    w = g.world
+    flow.intake(w, SimGM())
+    texts, target = _script(w)
+    gm, seen = SimGM(), set()
+    for i, text in enumerate(texts, 1):
+        before = __import__("copy").deepcopy(w)
+        t = flow.run_turn(w, gm, text, style="one")
+        seen.update(t.sort["steps"])
+        assert t.prose.strip() and "WHAT HAPPENED" not in t.prose, (text, t.prose)
+        assert coherence.check(w) + coherence.check_step(before, w) == [], (name, text)
+        if text.startswith("I go to") and target:
+            assert w.get("world_state.location") == target
+        if i % 4 == 0:
+            g.save()
+            assert Game.open(tmp_path, "g").world.tree == w.tree
+    assert w.round == len(texts) and w.time["day_index"] >= 3 and {"roll", "fight", "done"} <= seen, seen

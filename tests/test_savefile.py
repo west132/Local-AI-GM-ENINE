@@ -43,7 +43,8 @@ def test_export_then_import_gives_the_same_world_back(tmp_path):
     text = savefile.export_save(w, BG, "t")
     assert "# PART A" in text and "# PART B" in text and "npcs.nadia_voss.state.status :: R1: waits" in text
     w2, notes = savefile.import_save(text, BG)
-    assert w2.round == w.round and w2.tree == w.tree, [k for k in w.tree if w.tree[k] != w2.tree.get(k)]
+    keep = lambda tree: {k: v for k, v in tree.items() if k != "recent_turns"}          # the last few tellings are a convenience, not part of a save
+    assert w2.round == w.round and keep(w2.tree) == keep(w.tree), [k for k in w.tree if w.tree[k] != w2.tree.get(k)]
 
 
 def test_the_exported_file_is_a_save_the_old_reader_format_understands():

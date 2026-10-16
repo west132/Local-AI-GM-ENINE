@@ -37,9 +37,11 @@ settings.json   written by the Settings page (it holds your API key if you enter
 A BACKGROUND writes every date as `YYYY-MM-DD`, or defines its own calendar as a table (months, days, leap rule); see "Calendars" in `docs/DESIGN.md`.
 
 ## How it works
-`engine/steps.yaml` is the turn in the form the program executes: sort → (confirm) → judge → fight → ask → react → offer → quest → injury → ending → ten-round check → tell → check → recap.
+The AI is the game master and answers each action in **one form** (`single:` in `engine/steps.yaml`): most actions are settled in that one call; when dice or a person's answer are needed the form says so, the program
+rolls, and the AI is asked again with the result (two calls). The program keeps the rules, dice, arithmetic, time, state, saves and checks; the AI is shown the last few exchanges so the story stays continuous.
+The older step-by-step turn (sort → confirm → judge → fight → ask → react → offer → quest → injury → ending → ten-round check → tell → check → recap, `turn:` in the same file) is still there as a Settings choice ("How each action is played").
 Each step says what the AI sees, the form it must fill in, and what the program does with it. `engine/rules.md` is the one file of judgement rules (numbered sections); each step names the sections it loads, and carries its own task, inputs and form.
-The program passes every decision from one AI call to the next, and a turn it cannot record is dropped whole (nothing kept, the round does not advance).
+The program passes every decision from one AI call to the next (and the one-form turn is recorded only if the whole reply holds), and a turn it cannot record is dropped whole (nothing kept, the round does not advance).
 
 | Read | For |
 |---|---|

@@ -77,13 +77,25 @@ Every AI call has the same shape, and the order matters because a model acts on 
 Nothing here depends on the size of the model: a clear task, only the relevant records, and the exact spelling of what must be written help every model, and a strong model
 simply has more room to be good inside it.
 
+## Two ways to play a turn
+
+`turn_style` in Settings picks how an action is asked of the AI; the program around it (dice, arithmetic, time, ledger, owned paths, all-or-nothing commit, leak filter, coherence check) is the same.
+
+- **one** (default): `single:` in `engine/steps.yaml`. One form with a `mode`: `done` (record the changes and tell the scene, in the same reply), `roll`, `ask`, `fight`, `decision`, `confirm`. Only `done` is final.
+  For the other modes the program does its part (rolls, answers, fights, stops for the player) and asks the same form again with the results under RESULTS, so a turn is one call, two when dice or a person's answer are needed
+  (a new offer's shape and a due that fell during the action can add one more). A `done` reply is checked as a whole *before anything is recorded*: the telling (labels, headings, words put in the player's mouth, secrets),
+  the report, the typed fields, the ops against the ledger and the owned paths; if any part fails the AI is sent back with the reason and nothing was kept. At most three rolls, questions or fights per turn, then it must decide.
+  The prompt carries the rules (about 14,000 tokens) in the system text, which is the same for every call, so a server that caches the start of the prompt only reads it once; this needs a context of at least 24,576 tokens (32,768 recommended).
+  The last five exchanges (the player's line and what the AI told, shortened) are kept in the save as `recent_turns` and shown as THE STORY JUST NOW. They are the AI's continuity, not part of a save file (export leaves them out), and the AI cannot write them.
+- **steps**: `turn:` in the same file, the older pipeline (sort, judge, fight, wonder, react, offer, quest, injury, ending, tell, audit): shorter prompts, more calls.
+
 ## How the parts fit together
 
 **Where each thing lives (one place each).** `engine/steps.yaml`: the turn: for every step its rule sections, what the AI is shown, its task, its form and the program handler.
 `engine/rules.md`: all judgement rules, numbered sections. `engine/generate.yaml`: the six world-making forms. `localgm/flow.py` runs the turn; `rules.py`, `state.py`, `combat.py`, `clock.py`,
 `mechanics.py` hold the arithmetic and the records; `coherence.py` checks the whole world agrees with itself; `simgm.py` is a practice GM with no AI.
 
-**A turn, end to end.** player words → *sort* (note) → *judge* (verdict, roll set-up, asks) → program rolls / settles → *fight* → *wonder* → program answers → *react* (report, ops, time, move)
+**A turn, end to end** (steps style; the one-form style folds sort, judge, fight, wonder, react, quest, injury, ending and tell into one form and keeps everything after it). player words → *sort* (note) → *judge* (verdict, roll set-up, asks) → program rolls / settles → *fight* → *wonder* → program answers → *react* (report, ops, time, move)
 → program validates and commits all or nothing → dues that fell are decided in a second pass → *tell* (from the note / report / results) → *audit* → coherence check.
 Every arrow is a hand-off the program carries; nothing is passed by a model "remembering".
 

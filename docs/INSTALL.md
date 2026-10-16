@@ -27,7 +27,7 @@ Press **Save**, then **Test the AI**, then **Check this model**. Home shows the 
    (Windows: open a terminal in this folder, run `.venv\Scripts\activate`, then the line above. This is a prebuilt CPU wheel; no compiler needed.
    If you have a graphics card and want it used, follow the library's own instructions for a CUDA/Metal build instead, then choose *auto* below.)
 2. Put a `.gguf` model file in the `models` folder (make the folder if it is not there). Instruction-tuned models of 7B and larger work best; a 14B is the intended size.
-3. Settings → **Where the AI runs: gguf**, pick the file, **Run the model file on: cpu** (never use a graphics card) or **auto**, set **CPU threads** (0 = automatic; a good value is your number of physical cores) and **Context size** (the engine needs about 16384 for long games; lower it if you run out of memory).
+3. Settings → **Where the AI runs: gguf**, pick the file, **Run the model file on: cpu** (never use a graphics card) or **auto**, set **CPU threads** (0 = automatic; a good value is your number of physical cores) and **Context size** (the default one-form turn needs at least 24576, 32768 recommended, because the rules are sent with every call; the older step-by-step style (**How each action is played: steps**) works from about 16384; lower it if you run out of memory, or ask for fewer tokens by choosing a smaller or more compressed model).
 4. Save, Test, Check.
 
 CPU speed: a 14B model on a CPU takes minutes per turn; a 7B is faster. The two switches at the bottom of Settings cut AI calls per turn:

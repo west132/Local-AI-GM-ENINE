@@ -156,7 +156,10 @@ def settings_page(msg="", errs=()) -> bytes:
 <label>API key (api / server with a key)</label><input name="api_key" type="password" autocomplete="off" placeholder="{html.escape(APP.settings.key_hint() or "not set")}">
 <p class="mut">Leave blank to keep the saved key. It is stored in settings.json on this PC and sent only to the address above. <label style="display:inline"><input type="checkbox" name="clear_api_key" value="1"> remove the saved key</label></p>
 <label>Context size (tokens, model file only)</label><input name="ctx" type="number" value="{d["ctx"]}">
-<label>Fewer AI calls per turn</label>{sel("merge_questions", S.CHOICES["merge_questions"], d["merge_questions"])}
+<p class="mut">The one-form turn sends the rules (about 14,000 tokens) and the records in every call: use 24576 or more (32768 recommended).</p>
+<label>How each action is played</label>{sel("turn_style", S.CHOICES["turn_style"], d["turn_style"])}
+<p class="mut">one = the AI answers in one form (one call, two when dice or a person's answer are needed) · steps = the older step-by-step turn (more calls, shorter prompts)</p>
+<label>Fewer AI calls per turn (steps only)</label>{sel("merge_questions", S.CHOICES["merge_questions"], d["merge_questions"])}
 <p class="mut">yes = the world step asks its open questions in the same call · helps slow computers</p>
 <label>AI re-reads its telling</label>{sel("check_telling", S.CHOICES["check_telling"], d["check_telling"])}
 <p class="mut">no = skip the self-check call (faster, a little less careful)</p>

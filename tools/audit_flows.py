@@ -8,6 +8,7 @@ from localgm.state import World, background_tree
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 E = ROOT / "engine"
 steps = flow.load_steps()
+gm = flow.single_step()
 intake = flow.load_intake()
 src = {p.name: p.read_text(encoding="utf-8") for p in (ROOT / "localgm").glob("*.py")}
 code = "\n".join(v for k, v in src.items() if k not in ("generate.py", "simgm.py"))
@@ -18,7 +19,7 @@ def bad(msg): findings.append(msg); print("FINDING:", msg)
 # 1. each step: handler, rules, inputs, when
 w = World(background_tree((ROOT / "examples/ashfall_hunter/background.md").read_text(encoding="utf-8")))
 t = flow.Turn(w, "x")
-for s in steps + [intake]:
+for s in steps + [gm, intake]:
     if s["program"] not in flow.HANDLERS and s["program"] != "set_dues":
         bad(f"step {s['id']}: handler {s['program']!r} does not exist")
     for r in s.get("rules", []):
@@ -33,12 +34,12 @@ for s in steps + [intake]:
             bad(f"step {s['id']}: inputs fail: {e}")
 
 # 2. handlers all used; rule files all used
-used_h = {s["program"] for s in steps}
+used_h = {s["program"] for s in steps + [gm]}
 for h in flow.HANDLERS:
     if h not in used_h: bad(f"handler {h} is not used by any step")
 import yaml
 gen = yaml.safe_load((E / "generate.yaml").read_text(encoding="utf-8"))["stages"]
-used_r = {r for s in steps + [intake] + gen for r in s.get("rules", [])}
+used_r = {r for s in steps + [gm, intake] + gen for r in s.get("rules", [])}
 for n in sorted(flow.rules_sections()):
     if not any(int(r.split("_")[0]) == n for r in used_r): bad(f"rules section {n} is loaded by no step")
 
@@ -58,7 +59,7 @@ def fields(sch, prefix=""):
     elif sch.get("type") == "array":
         yield from fields(sch.get("items", {}))
 SKIP = {"uncertain", "for", "against", "note", "reason", "because", "channel", "notes", "problems", "ok", "description", "value", "path", "op"}
-for s in steps + [intake]:
+for s in steps + [gm, intake]:
     if s.get("ai") is False or s["output"].get("type") == "string":
         continue
     for f in sorted(set(fields(s["output"])) - SKIP):

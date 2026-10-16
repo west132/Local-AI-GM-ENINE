@@ -7,17 +7,18 @@ DEFAULTS = {
     "gguf": "",                   # file name inside the models folder; empty = the first one found
     "url": "http://localhost:1234/v1",
     "model": "",
-    "ctx": 16384,
+    "ctx": 32768,                 # the one-form turn sends the rules (about 14k tokens) and the records in every call: 24k is the least that works
     "temperature": 0.3,
     "max_tokens": 1500,
     "language": "en",
     "api_key": "",                # backend "api" only; kept in this file, never shown again, never sent anywhere but the API address
     "device": "auto",             # model file only: auto = use the GPU if the library has one, cpu = never
     "threads": 0,                 # model file only: CPU threads, 0 = let the library choose
+    "turn_style": "one",          # one = the AI answers each action in one form (1 call, 2 when dice or answers are needed) | steps = the older step-by-step turn
     "merge_questions": "yes",     # yes = the world step asks its open questions in the same call (one AI call fewer per turn)
     "check_telling": "yes",       # yes = the AI re-reads its telling against the facts (one AI call per turn)
 }
-CHOICES = {"backend": ["gguf", "server", "api", "demo"], "language": ["en", "zh"], "device": ["auto", "cpu"],
+CHOICES = {"backend": ["gguf", "server", "api", "demo"], "language": ["en", "zh"], "device": ["auto", "cpu"], "turn_style": ["one", "steps"],
            "merge_questions": ["yes", "no"], "check_telling": ["yes", "no"]}
 
 
@@ -67,7 +68,7 @@ class Settings:
         return problems
 
     def turn_options(self) -> dict:
-        return {"merge_questions": self.data["merge_questions"] == "yes", "check_telling": self.data["check_telling"] == "yes"}
+        return {"style": self.data["turn_style"], "merge_questions": self.data["merge_questions"] == "yes", "check_telling": self.data["check_telling"] == "yes"}
 
     def fingerprint(self) -> str:
         """Which AI this is: a check result belongs to one model on one backend."""

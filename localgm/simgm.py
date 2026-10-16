@@ -97,13 +97,39 @@ class SimGM:
         if not form:
             kind = "epilogue" if "## 21" in system else "tell"
         else:
-            kind = next((n for k, n in (("kind:", "sort"), ("verdict:", "judge"), ("foes?:", "fight"), ("new_offer:", "offer"), ("injury:", "injury"),
+            kind = next((n for k, n in (("mode:", "gm"), ("kind:", "sort"), ("verdict:", "judge"), ("foes?:", "fight"), ("new_offer:", "offer"), ("injury:", "injury"),
                                          ("met:", "ending"), ("ok:", "audit"), ("actors:", "intake")) if form.startswith(k)), None)
             if kind is None:
                 kind = "wonder" if form.startswith("asks:") else "react" if ("minutes:" in form or form.startswith("asks?:")) else \
                        "checkpoint" if "notes?:" in form else "quest"
         self.calls.append(kind)
         return getattr(self, "do_" + kind)(user)
+
+    # ---- the one-form turn: the same plain judgement, asked as one form ----
+    def do_gm(self, user):
+        text = _line(user, "PLAYER: ")
+        results = user.split("RESULTS (decided by the program", 1)[-1].split("\n\n", 1)[0] if "RESULTS (decided by the program" in user else ""
+        have = bool(re.search(r"^(RESULT|SETTLED|IMPOSSIBLE)", results, re.M)) or _second_pass(user)
+        people, places = _people(user), _places(user)
+        if "WAITING FOR THE PLAYER'S GO-AHEAD" in user and re.match(r"\s*(yes|ok|go|do it)", text.lower()):
+            return {"mode": "confirm"}
+        if not have:
+            if VIOLENT.search(text):
+                return {"mode": "fight", **self.do_fight(user)}
+            if RISKY.search(text):
+                j = self.do_judge(user)
+                return {"mode": "roll", "cites": j["cites"], "roll": j["roll"]}
+            who = _addressed(text, people)[:1]
+            if who and not WAIT.match(text):
+                return {"mode": "ask", **self.do_wonder(user)}
+        self._asked = True                                  # the questions are asked by mode ask, not inside the world reply
+        try:
+            r = self.do_react(user)
+        finally:
+            self._asked = False
+        r.pop("asks", None)
+        scene = self.do_tell(f"WHAT HAPPENED: {r['report']}\n" + user)
+        return {"mode": "done", "cites": ["player"], **r, "scene": scene}
 
     # ---- the steps ----
     def do_sort(self, user):

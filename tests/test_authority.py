@@ -135,7 +135,7 @@ def test_things_the_story_mentions_but_nobody_recorded_do_not_exist():
     equipment = copy.deepcopy(w.player["equipment"])
     llm = Scripted([FAST, "You pick up a golden key, and a hidden door opens to a vault of coins.", OK])
     t = flow.run_turn(w, llm, "I look around")
-    assert w.player["equipment"] == equipment and "vault" not in json.dumps(w.tree) and w.cash()[0] == 120
+    assert w.player["equipment"] == equipment and "vault" not in json.dumps({k: v for k, v in w.tree.items() if k != "recent_turns"}) and w.cash()[0] == 120
     assert not [f for f in t.facts if f.startswith("RECORDED")]
 
 

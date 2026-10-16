@@ -23,7 +23,8 @@ def main(argv=None):
     ap.add_argument("--game", default="game")
     ap.add_argument("--saves", default="saves")
     ap.add_argument("--url"); ap.add_argument("--model", default="")
-    ap.add_argument("--gguf"); ap.add_argument("--ctx", type=int, default=8192)
+    ap.add_argument("--gguf"); ap.add_argument("--ctx", type=int, default=32768)
+    ap.add_argument("--style", choices=["one", "steps"], default="one", help="one = the AI answers each action in one form; steps = the older step-by-step turn")
     ap.add_argument("--script", help="file with one player line per turn (non-interactive)")
     a = ap.parse_args(argv)
     ai = backend.OpenAICompat(a.url, a.model) if a.url else backend.LlamaCpp(a.gguf, a.ctx)
@@ -45,7 +46,7 @@ def main(argv=None):
         if text.strip().lower().startswith("/rewind"):
             game.rewind(int(text.split()[1])); print(header(game.world)); continue
         print(f"> {text}")
-        turn = flow.run_turn(game.world, ai, text)
+        turn = flow.run_turn(game.world, ai, text, style=a.style)
         game.log({"input": text, "sort": turn.sort, "lines": turn.lines, "facts": turn.facts, "events": turn.events, "prose": turn.prose})
         game.save()
         print(show(turn), "\n")

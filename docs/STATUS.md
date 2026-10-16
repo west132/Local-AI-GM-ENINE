@@ -8,6 +8,7 @@ Turn the V5 text engine (written for web chat) into installable local software w
 **world fact > dice > AI**; dice only where an outcome could honestly go either way; the user changes settings and goes Home with buttons.
 
 ## 2. How it is built
+- A turn can be played in two ways (Settings → "How each action is played"): **one form** (default; one call, two with dice or a person's answer) or the older **step-by-step** turn; both are in `engine/steps.yaml` and share all the program-side checks. The one-form style is covered by tests with scripted replies and by whole games with the practice GM; it has **not been played by a real model larger than 3B yet**.
 - `engine/steps.yaml` is the only definition of a turn (each step: its rule sections, inputs, task, form and handler): sort → confirmed → judge → fight → wonder → react → offer → quest → injury → ending →
   checkpoint → tell → audit → epilogue (+ a start-up intake). `localgm/flow.py` walks it. Each step names its rule files, what the AI is shown,
   the form it must fill, and the program handler that validates and commits it. A refused reply goes back to the AI once with the reason.

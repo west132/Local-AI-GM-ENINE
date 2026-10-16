@@ -4,7 +4,7 @@ Nothing about the order or conditions of a turn lives here: run_turn walks the Y
 what each named `program` does, and how a step's prompt is built.
 """
 from __future__ import annotations
-import json, os, pathlib, re, sys, time
+import copy, json, os, pathlib, re, sys, time
 from types import SimpleNamespace
 import yaml
 
@@ -15,6 +15,7 @@ ENGINE = pathlib.Path(__file__).resolve().parent.parent / "engine"
 on_step = None      # the app sets this to show which step is running
 MAX_WORDS = 350
 _FILE = None
+_CACHE: dict = {}
 
 
 def _yaml() -> dict:
@@ -30,6 +31,24 @@ def load_steps() -> list[dict]:
 
 def load_intake() -> dict:
     return _yaml()["intake"]
+
+
+def single_step() -> dict:
+    """The one-form step: the judge, fight and world forms merged under `mode`, with the choice first and the telling last."""
+    if "single" not in _CACHE:
+        step = copy.deepcopy(_yaml()["single"])
+        props = step["output"]["properties"]
+        for k in ("verdict", "reason", "uncertain"):      # the judge's verdict is replaced by `mode`
+            props.pop(k, None)
+        first = ["mode", "decision", "asks", "cites", "roll", "foes", "exchanges", "kill", "stop"]
+        step["output"]["properties"] = {**{k: props[k] for k in first}, **{k: v for k, v in props.items() if k not in first and k != "scene"}, "scene": props["scene"]}
+        _CACHE["single"] = step
+    return _CACHE["single"]
+
+
+def single_steps() -> list[dict]:
+    """The turn when the AI answers in one form: the form, then the same checkpoint, re-reading and epilogue as the step-by-step turn."""
+    return [single_step()] + [s for s in load_steps() if s["id"] in ("checkpoint", "audit", "epilogue")]
 
 
 _RULES = None
@@ -81,6 +100,8 @@ class Turn:
         self.resolved: dict[str, dict] = {}   # results of this turn, by normalised key: {positive, label}
         self.governs: dict[str, str] = {}     # record path -> the result that decides it
         self.events: list[dict] = []          # what changed, why, and by what channel (goes to the journal)
+        self.shape_owed = None                # a rolled offer shape the next commit must write
+        self.modes: list[str] = []            # one-form turn: the replies so far (roll, ask, fight … then done)
 
     def module(self, name: str) -> bool:
         return rules.module(self.world, name)
@@ -169,7 +190,8 @@ def inputs(step: dict, turn: Turn) -> str:
         elif name == "player_text":
             if turn.dues_pass == 2:          # the second look of a turn: time passed during the action and things fell due
                 parts.append(f"PLAYER (ALREADY DONE AND RECORDED, see RESULTS; do not repeat it, do not move the player again): {turn.text}\n"
-                             "This pass is only for what fell due while it happened: decide the DUE NOW items and nothing else.")
+                             "This pass is only for what fell due while it happened: decide the DUE NOW items and nothing else."
+                             + (" Mode done. Your scene tells the WHOLE action from its beginning, with what fell due, from the RESULTS." if step["id"] == "gm" else ""))
             else:
                 parts.append(f"PLAYER: {turn.text}")
         elif name in ("place", "actors_present"):
@@ -184,7 +206,14 @@ def inputs(step: dict, turn: Turn) -> str:
             if turn.pending:
                 parts.append("WAITING FOR THE PLAYER'S GO-AHEAD: " + turn.pending["ask"]
                              + "\n(kind=confirm if the player agrees to exactly this; anything else drops it)")
+        elif name == "recent":
+            rec = w.tree.get("recent_turns") or []
+            if rec:
+                parts.append("THE STORY JUST NOW (oldest first, for continuity only; these turns are finished):\n" + "\n".join(
+                    f"- The player did: {r['you']}\n  You told: {r['gm']}" for r in rec))
         elif name == "ending_conditions":
+            if step["id"] == "gm" and not turn.module("bounded_scenario_endings"):
+                continue
             st = w.tree.get("ending_state") or {"closed": []}
             parts.append("ENDING CONDITIONS (id: text) — closed: " + ", ".join(st["closed"]) + "\n"
                          + "\n".join(f"{i}: {t}" for i, t in rules.ending_list(w).items()))
@@ -634,6 +663,8 @@ def h_commit(turn: Turn, out: dict):
     now_ops = [o for o in out["ops"] if o["op"] != "plan"]
     plan_ops = [o for o in out["ops"] if o["op"] == "plan"]      # a plan's "in N minutes" counts from the end of the action
     faults += trial.commit(now_ops)
+    if turn.shape_owed:
+        faults += _shape_faults(turn, trial)
     faults += _typed_changes(trial, turn, out, new_fills, facts, lines)
     minutes = int(out["minutes"]) if turn.dues_pass == 1 else 0
     if not faults:
@@ -654,6 +685,7 @@ def h_commit(turn: Turn, out: dict):
     facts += tf
     days = trial.time["day_index"] - w.time["day_index"]
     w.tree = trial.tree
+    turn.shape_owed = None
     turn.fills = new_fills
     for p, d in turn.dues:
         w.clear_due(p, d)
@@ -676,7 +708,7 @@ def h_shape_roll(turn: Turn, out: dict):
     if not out["new_offer"]:
         return
     n = M.roll(1, 10)[0]
-    turn.shape = "SHORT" if n <= 7 else "LONG" if n <= 9 else "CHAIN"
+    turn.shape = turn.shape_owed = "SHORT" if n <= 7 else "LONG" if n <= 9 else "CHAIN"
     line = f"offer shape 1d10: {n} → {turn.shape}"
     if turn.shape == "CHAIN":
         m = M.roll(1, 4)[0]
@@ -692,23 +724,30 @@ def _events(turn: Turn, ops: list[dict]) -> None:
         turn.events.append({k: v for k, v in e.items() if v})
 
 
+def _shape_faults(turn: Turn, trial: World) -> list[str]:
+    """A new offer's shape was rolled: the quest written must exist and have exactly that shape."""
+    new = [q for q in (trial.tree.get("quests") or {}) if q not in (turn.world.tree.get("quests") or {})]
+    if not new:
+        return [f"a new {turn.shape} offer was rolled; write it as a quest in ops"]
+    if trial.tree["quests"][new[0]].get("type") != turn.shape:
+        return [f"the rolled shape is {turn.shape}; the new quest's type must be exactly that"]
+    return []
+
+
 def h_commit_ops(turn: Turn, out: dict):
     _spell_paths(out.get("ops") or [])
     w = turn.world
     trial = w.clone()
     faults = rules.op_faults(w, out["ops"], turn.resolved, turn.governs)
     faults += trial.commit(out["ops"])
-    if not faults and turn.shape:
-        new = [q for q in (trial.tree.get("quests") or {}) if q not in (w.tree.get("quests") or {})]
-        if not new:
-            faults.append(f"a new {turn.shape} offer was rolled; write it")
-        elif trial.tree["quests"][new[0]].get("type") != turn.shape:
-            faults.append(f"the rolled shape is {turn.shape}; the new quest's type must be exactly that")
+    if not faults and turn.shape_owed:
+        faults += _shape_faults(turn, trial)
     if faults:
         raise M.RuleError("nothing was recorded. Fix:\n- " + "\n- ".join(faults))
     xp = rules.quest_xp(trial, w.tree)
     tl, tf = rules.temper_new(w.tree, trial.tree)
     w.tree = trial.tree
+    turn.shape_owed = None
     _record_lines(turn, out["ops"])
     _events(turn, out["ops"])
     turn.facts += xp + tf
@@ -760,7 +799,9 @@ def clean(prose: str) -> str:
 _LABELS = re.compile(r"THE GM'S DECISION|WHAT HAPPENED|SETTLED \(no roll\)|THE PLAYER CHARACTER|RECORDED|\bRESULTS?\b:?|\bFACTS\b|\(from sorting[^)]*\)|\(the GM's account[^)]*\):?", re.I)
 
 
-def h_show(turn: Turn, out: str):
+def vet_prose(turn: Turn, out: str, account: str | None = None) -> str:
+    """The telling as the player may read it, or a RuleError that sends the AI back. `account` is what the telling must not merely copy
+    (the facts' WHAT HAPPENED, or the report of a one-form reply)."""
     prose = clean(out)
     if _LABELS.search(prose):
         if not turn.final:
@@ -776,19 +817,24 @@ def h_show(turn: Turn, out: str):
     if invented and not turn.final:
         raise M.RuleError(f"you wrote words for the player ({invented[0][:50]!r}). The player said only what the PLAYER line says; "
                           "describe what you see and hear, and what the others say, and stop.")
-    account = " ".join(f[len("WHAT HAPPENED:"):] for f in turn.facts if f.startswith("WHAT HAPPENED:"))
+    if account is None:
+        account = " ".join(f[len("WHAT HAPPENED:"):] for f in turn.facts if f.startswith("WHAT HAPPENED:"))
     norm = lambda x: re.sub(r"\W+", " ", x).lower().strip()
     if account.strip() and not turn.final and norm(account) in norm(prose) and len(prose.split()) < len(account.split()) + 12:
         raise M.RuleError("you only copied the account. Tell it as a scene: what is seen, heard and said, with the people acting and speaking.")
     echo = re.sub(r"\W+", " ", turn.text).strip().lower()
     if len(echo) >= 25 and echo in re.sub(r"\W+", " ", prose).lower():
         raise M.RuleError("your text repeats the player's own words. Tell what happens as a result: what the world and the people in it do")
-    known = turn.text + " " + " ".join(turn.results + turn.facts)
+    known = turn.text + " " + " ".join(turn.results + turn.facts) + " " + (account or "")
     terms = rules.secret_terms(turn.world, known)
     bad = rules.leaks(prose, terms)
     if bad and not turn.final:
         raise M.RuleError(f"your text names {bad}, which the player has not learned. Tell it without them.")
-    turn.prose = rules.redact(prose, terms) if bad else prose
+    return rules.redact(prose, terms) if bad else prose
+
+
+def h_show(turn: Turn, out: str):
+    turn.prose = vet_prose(turn, out)
 
 
 def h_epilogue(turn: Turn, out: str):
@@ -801,7 +847,76 @@ def h_audit(turn: Turn, out: dict):
         return "retell"
 
 
-HANDLERS = {"route": h_route, "roll": h_roll, "roll_pending": h_roll_pending, "combat": h_combat, "ask_roll": h_ask_roll,
+MAX_SIDE_CALLS = 3      # rolls, questions and fights a one-form turn may ask for before it must decide
+
+
+def h_gm(turn: Turn, out: dict):
+    """The one-form reply. Rolls, questions and fights are done by the program and the AI is asked again with the results;
+    a finished reply (mode done) is checked as a whole, and recorded and told only if all of it holds (nothing is half-applied)."""
+    w, mode = turn.world, out["mode"]
+    if turn.pending and mode != "confirm":
+        w.tree.pop("pending", None)            # the player changed their mind: dropped at no cost
+        turn.facts.append("The earlier risky action was dropped; nothing was rolled.")
+    if mode != "done":
+        if len([m for m in turn.modes if m != "done"]) >= MAX_SIDE_CALLS:
+            raise M.RuleError("no more rolls, questions or fights this turn: reply with mode done, using the results you have")
+        if mode == "confirm":
+            if not turn.pending:
+                raise M.RuleError("nothing is waiting for the player's go-ahead, so mode confirm is wrong; choose the mode that fits the action")
+            h_roll_pending(turn, None)
+        elif mode == "fight":
+            if not out.get("exchanges"):
+                raise M.RuleError("mode fight needs `exchanges`")
+            h_combat(turn, out)
+        elif mode == "roll":
+            h_roll(turn, {"verdict": "roll", "cites": out.get("cites") or [], "roll": out.get("roll")})
+        elif mode == "ask":
+            h_roll(turn, {"verdict": "ask", "asks": out.get("asks") or [], "cites": out.get("cites") or []})
+        elif mode == "decision":
+            dec = out.get("decision")
+            if not dec or not str(dec.get("question", "")).strip():
+                raise M.RuleError("mode decision needs `decision`: the question and its options")
+            h_roll(turn, {"verdict": "certain", "decision": dec})
+        turn.modes.append(mode)
+        return None if turn.halt else "again"
+    # ---- mode done: everything is checked before anything is recorded
+    report, scene = str(out.get("report") or "").strip(), str(out.get("scene") or "").strip()
+    if "minutes" not in out:
+        raise M.RuleError("mode done needs `minutes`: the believable duration of what happened")
+    if len(scene.split()) < 8:
+        raise M.RuleError("mode done needs `scene`: what the player sees and hears now, as plain prose")
+    if out.get("asks"):
+        raise M.RuleError("`asks` belongs to mode ask; in mode done leave it out")
+    out = {**out, "asks": [], "ops": out.get("ops") or []}
+    rules.check_cites(w, out.get("cites") or [])
+    blocked = str(out.get("blocked") or "").strip()
+    if blocked and (out["ops"] or not out.get("cites")):
+        raise M.RuleError("`blocked` means the action does not happen: leave ops empty and cite the records that rule it out in `cites`")
+    if turn.injury_owed and not (out.get("injury") and out["injury"]["home"] in rules.HOMES and len(out["injury"]["effect"].strip()) >= 8):
+        raise M.RuleError(f"a lasting injury follows (see RESULTS): fill `injury` with its name, home (one of {rules.HOMES}) and exactly what changes (effect)")
+    if out.get("ending") and turn.module("bounded_scenario_endings"):
+        rules.ending_update(w.clone(), out["ending"]["met"], out["ending"]["closed"])      # RuleError here changes nothing
+    if len(report) < 5:
+        raise M.RuleError("`report` is missing: say in plain sentences what happened in the world during this action, who did what and why, "
+                          "limited to what the player could see, hear or learn.")
+    prose = vet_prose(turn, scene, report)
+    if out.get("new_offer") and not turn.shape:
+        h_shape_roll(turn, {"new_offer": True})          # the program rolls the shape; the AI then writes the quest in a second reply
+        turn.modes.append("offer")
+        return "again"
+    again = h_commit(turn, out)
+    if blocked:
+        turn.facts.append(f"IMPOSSIBLE: {blocked}")
+    if turn.injury_owed:
+        h_record_injury(turn, out["injury"])
+    if out.get("ending") and turn.module("bounded_scenario_endings"):
+        h_ending(turn, out["ending"])
+    turn.modes.append("done")
+    turn.prose = prose
+    return again
+
+
+HANDLERS = {"gm": h_gm, "route": h_route, "roll": h_roll, "roll_pending": h_roll_pending, "combat": h_combat, "ask_roll": h_ask_roll,
             "commit": h_commit, "shape_roll": h_shape_roll, "commit_ops": h_commit_ops, "record_injury": h_record_injury,
             "ending": h_ending, "epilogue": h_epilogue, "show": h_show, "audit": h_audit}
 
@@ -912,16 +1027,21 @@ class ScenarioEnded(Exception):
     pass
 
 
-def run_turn(world: World, llm, text: str, merge_questions: bool = False, check_telling: bool = True) -> Turn:
+REMEMBER = 5       # exchanges kept as the story just now, shown to the AI in every one-form call
+BRIEF = 700        # characters of each telling kept
+
+
+def run_turn(world: World, llm, text: str, merge_questions: bool = False, check_telling: bool = True, style: str = "steps") -> Turn:
     """Runs on a copy of the world; the real one changes only if the whole turn completes.
-    merge_questions: the world step asks its open questions itself instead of a separate call first (one call fewer per turn).
+    style: "steps" = the step-by-step turn (steps.yaml `turn`); "one" = the AI answers in one form (steps.yaml `single`).
+    merge_questions: (steps) the world step asks its open questions itself instead of a separate call first (one call fewer per turn).
     check_telling: the audit call after the telling (off = one call fewer per turn)."""
     if (world.tree.get("ending_state") or {}).get("met"):
         raise ScenarioEnded("The scenario has ended.")
     work = world.clone()
     turn = Turn(work, text)
-    steps = load_steps()
-    byid = {s["id"]: s for s in steps}
+    steps = single_steps() if style == "one" else load_steps()
+    byid = {s["id"]: s for s in load_steps()}
     skip = ({"wonder"} if merge_questions else set()) | (set() if check_telling else {"audit"})
     for step in steps:
         if step["id"] in skip or not _when(step["when"], turn):
@@ -935,7 +1055,10 @@ def run_turn(world: World, llm, text: str, merge_questions: bool = False, check_
             if again == "retell":
                 execute(llm, byid["tell"], turn)
             break
+    if style == "one":
+        turn.sort = {"kind": "gm", "steps": turn.modes}
     work.round += 1
+    work.tree["recent_turns"] = ((work.tree.get("recent_turns") or []) + [{"round": work.round, "you": text[:300], "gm": " ".join(turn.prose.split())[:BRIEF]}])[-REMEMBER:]
     turn.warnings = coherence.check(work) + coherence.check_step(world, work, turn.events)      # does the whole world still agree with itself?
     world.tree, world.round = work.tree, work.round
     return turn
