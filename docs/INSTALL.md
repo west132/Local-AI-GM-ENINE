@@ -24,11 +24,19 @@ Press **Save**, then **Test the AI**, then **Check this model**. Home shows the 
    ```text
    pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
    ```
-   (Windows: open a terminal in this folder, run `.venv\Scripts\activate`, then the line above. This is a prebuilt CPU wheel; no compiler needed.
-   If you have a graphics card and want it used, follow the library's own instructions for a CUDA/Metal build instead, then choose *auto* below.)
-2. Put a `.gguf` model file in the `models` folder (make the folder if it is not there). Instruction-tuned models of 7B and larger work best; a 14B is the intended size.
-3. Settings → **Where the AI runs: gguf**, pick the file, **Run the model file on: cpu** (never use a graphics card) or **auto**, set **CPU threads** (0 = automatic; a good value is your number of physical cores) and **Context size** (the default one-form turn needs at least 24576, 32768 recommended, because the rules are sent with every call; the older step-by-step style (**How each action is played: steps**) works from about 16384; lower it if you run out of memory, or ask for fewer tokens by choosing a smaller or more compressed model).
+   (Windows: open a terminal in this folder, run `.venv\Scripts\activate`, then the line above. This is a prebuilt CPU wheel; no compiler needed.)
+   **With an NVIDIA graphics card** you need the library's CUDA build instead, or the card is not used and the model runs on the processor, many times slower. The library publishes prebuilt CUDA wheels
+   at `https://abetlen.github.io/llama-cpp-python/whl/<tag>` (the tag matches your CUDA version, for example `cu124`; check the library's own page for the current tags). The Settings page tells you when the installed build cannot use your card.
+   If that is too much trouble, run the model in LM Studio (section B): it brings its own graphics support.
+2. Put a `.gguf` model file in the `models` folder (make the folder if it is not there). Instruction-tuned models work best; the engine is meant for the 14B–27B class.
+3. Settings → **Where the AI runs: gguf**. Leave **Performance settings: auto**. The program reads your PC (graphics card and its memory, RAM, processor threads) and the model file (size, layers, how much memory its context costs)
+   and picks how many layers go on the card, the context length (32768 if it fits, 24576 at the least), the cache type and the threads; the Settings page shows what it found and what it will do. If **Model file** is left empty it picks the
+   largest file in `models` that sits wholly on the card. Choose **manual** only to set **Run the model file on**, **CPU threads** and **Context size** yourself (the default one-form turn needs at least 24576 because the rules are sent with every call;
+   the older step-by-step style (**How each action is played: steps**) works from about 16384).
 4. Save, Test, Check.
+
+How much fits: the model's file must sit in the card's memory together with the context's cache (about 2.5–5 GB at 32768 for a 24B-class model) and about 1.3 GB of working space.
+On a 24 GB card that means files up to roughly 20 GB (a 24B model at Q4 or Q5 fits wholly; a Q6 does not leave room and some layers would run on the processor). The Settings page prints the figure for your card.
 
 CPU speed: a 14B model on a CPU takes minutes per turn; a 7B is faster. The two switches at the bottom of Settings cut AI calls per turn:
 *Fewer AI calls per turn = yes* and *AI re-reads its telling = no* roughly halve the waiting on a slow computer (a little less careful).

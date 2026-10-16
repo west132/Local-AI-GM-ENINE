@@ -5,7 +5,7 @@ A text role-playing game master that runs on your own computer, based on the NEW
 - **The program** rolls every die, does every sum, keeps the clock and calendar, money, supplies, records and saves, and refuses anything that breaks a fact or a result.
 - **The AI** is the game master: it decides what is possible, what people and the world do, and tells the story. It never rolls, and it cannot change what the records or the dice have settled (**world fact > dice > AI**, see `docs/DESIGN.md`).
 
-You can run the AI three ways with the same game: a model file inside the app (on the CPU or a graphics card), a local server (LM Studio / Ollama), or an online API with a key.
+The program reads your PC and the chosen model file and picks the load settings itself (Settings → Performance settings: auto). You can run the AI three ways with the same game: a model file inside the app (on the CPU or a graphics card), a local server (LM Studio / Ollama), or an online API with a key.
 
 ## Quick start
 1. Install Python 3.10 or newer (Windows: tick "Add Python to PATH").

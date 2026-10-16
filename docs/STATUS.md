@@ -14,6 +14,7 @@ Turn the V5 text engine (written for web chat) into installable local software w
   the form it must fill, and the program handler that validates and commits it. A refused reply goes back to the AI once with the reason.
 - The program rolls every die, does every sum, keeps time (one calendar, or a world's own calendar table), money, supplies, XP, rest, healing,
   clocks, dues, saves; commits all-or-nothing on a copy; freezes resolved results in a ledger so they are not rerolled.
+- The app reads the PC (graphics card and memory, RAM, threads) and the model file's header and picks layers on the card, context, cache type and threads (`backend.scan/read_gguf/plan_load/best_fit`; Settings → Performance settings: auto). Tested with synthetic model headers and a mocked driver reading; **not yet run on a real GPU or on Windows**, and it needs the CUDA build of llama-cpp-python to use a card.
 - Backends: LM Studio / Ollama (OpenAI-style), an in-process .gguf, and a Demo that needs no model. A Windows-style app (Home, Settings, Play,
   rewind, Export/Import save, Make a new world, Check this model) writes `settings.json` itself.
 - one rules file (27 sections), 167 tests, a browser check, an install check, a flow audit (`tools/audit_flows.py`). Install and run steps: `README.md`, `docs/INSTALL.md`.

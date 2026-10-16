@@ -12,13 +12,14 @@ DEFAULTS = {
     "max_tokens": 1500,
     "language": "en",
     "api_key": "",                # backend "api" only; kept in this file, never shown again, never sent anywhere but the API address
+    "tuning": "auto",             # auto = the program reads this PC and the model file and picks layers on the card, context and threads | manual = the three fields below
     "device": "auto",             # model file only: auto = use the GPU if the library has one, cpu = never
     "threads": 0,                 # model file only: CPU threads, 0 = let the library choose
     "turn_style": "one",          # one = the AI answers each action in one form (1 call, 2 when dice or answers are needed) | steps = the older step-by-step turn
     "merge_questions": "yes",     # yes = the world step asks its open questions in the same call (one AI call fewer per turn)
     "check_telling": "yes",       # yes = the AI re-reads its telling against the facts (one AI call per turn)
 }
-CHOICES = {"backend": ["gguf", "server", "api", "demo"], "language": ["en", "zh"], "device": ["auto", "cpu"], "turn_style": ["one", "steps"],
+CHOICES = {"backend": ["gguf", "server", "api", "demo"], "language": ["en", "zh"], "device": ["auto", "cpu"], "turn_style": ["one", "steps"], "tuning": ["auto", "manual"],
            "merge_questions": ["yes", "no"], "check_telling": ["yes", "no"]}
 
 
@@ -67,13 +68,20 @@ class Settings:
         self.save()
         return problems
 
+    def hardware(self, rescan: bool = False) -> dict:
+        """What this PC has (read once, again on request)."""
+        from . import backend
+        if rescan or getattr(self, "_hw", None) is None:
+            self._hw = backend.scan()
+        return self._hw
+
     def turn_options(self) -> dict:
         return {"style": self.data["turn_style"], "merge_questions": self.data["merge_questions"] == "yes", "check_telling": self.data["check_telling"] == "yes"}
 
     def fingerprint(self) -> str:
         """Which AI this is: a check result belongs to one model on one backend."""
         d = self.data
-        return "|".join(str(d.get(k, "")) for k in ("backend", "model", "gguf", "url", "device", "ctx"))
+        return "|".join(str(d.get(k, "")) for k in ("backend", "model", "gguf", "url", "device", "ctx", "tuning"))
 
     def remember_check(self, res: dict) -> None:
         self.data["last_check"] = {"for": self.fingerprint(), "passed": res["passed"], "total": res["total"], "verdict": res["verdict"]}

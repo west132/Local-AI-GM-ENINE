@@ -89,6 +89,15 @@ simply has more room to be good inside it.
   The last five exchanges (the player's line and what the AI told, shortened) are kept in the save as `recent_turns` and shown as THE STORY JUST NOW. They are the AI's continuity, not part of a save file (export leaves them out), and the AI cannot write them.
 - **steps**: `turn:` in the same file, the older pipeline (sort, judge, fight, wonder, react, offer, quest, injury, ending, tell, audit): shorter prompts, more calls.
 
+## Reading the PC (automatic settings)
+
+`backend.scan()` reads the graphics card (name, memory total/free, through the driver's `nvidia-smi`; Apple silicon counts 70% of its shared memory), RAM and processor threads, and whether the installed llama-cpp-python can use a card at all.
+`backend.read_gguf()` reads a model file's header (size, layers, attention heads, context it was trained for) without loading it, which gives the cost of the attention cache per token.
+`backend.plan_load()` then picks, in order of preference: everything on the card with a 32768 context; the cache in 8-bit to make room; a 24576 context; and only then some layers left to the processor (slow, and refused if RAM cannot hold the rest).
+`best_fit()` chooses the largest file in `models` that sits wholly on the card. With **Performance settings: auto** (default) `backend.make` uses the plan; **manual** uses the three fields on the Settings page.
+This is arithmetic from the file and the card, not a speed benchmark; real speed also depends on the model and the library build, and the memory figures are estimates (the card's free memory at the time of the scan is what counts).
+With LM Studio as the engine the page only prints the figures to set there (GPU offload, context length): LM Studio does the loading.
+
 ## How the parts fit together
 
 **Where each thing lives (one place each).** `engine/steps.yaml`: the turn: for every step its rule sections, what the AI is shown, its task, its form and the program handler.

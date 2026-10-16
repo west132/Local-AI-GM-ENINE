@@ -137,6 +137,35 @@ document.getElementById('savefile').onchange=async e=>{{document.getElementById(
     return page("Home", body)
 
 
+def pc_panel() -> str:
+    """What the program found about this PC and what it will do with the chosen model file. Read-only: the choices are the buttons below."""
+    d, gb = APP.settings.data, lambda mb: f"{mb / 1024:.0f} GB" if mb >= 10240 else f"{mb / 1024:.1f} GB"
+    try:
+        hw = APP.settings.hardware()
+    except Exception as e:
+        return f'<p class="mut">Could not read this PC ({html.escape(str(e))}).</p>'
+    gpu = hw["gpus"][0] if hw["gpus"] else None
+    rows = [f"<b>Your PC</b>: " + (f"{html.escape(gpu['name'])} with {gb(gpu['vram_mb'])} graphics memory" if gpu else "no usable graphics card found") + f" · {gb(hw['ram_mb'])} RAM · {hw['threads']} processor threads"]
+    if gpu and hw.get("offload") is False:
+        rows.append('<span class="bad">The installed llama-cpp-python cannot use the graphics card (the plain build). Install its CUDA build (docs/INSTALL.md), or let LM Studio run the model (Where the AI runs: server).</span>')
+    if d["backend"] == "gguf":
+        files = APP.settings.ggufs()
+        try:
+            name = d["gguf"] or backend.best_fit(APP.settings.models, files, hw) or (files[0] if files else "")
+            if name and d["tuning"] == "auto":
+                p = backend.plan_load(APP.settings.models / name, {**hw, "gpus": [] if d["device"] == "cpu" else hw["gpus"]})
+                rows.append(f"<b>{html.escape(name)}</b> ({gb(p['file_mb'])}"+ (", chosen as the best fit for this PC" if not d["gguf"] else "") + f") → {html.escape('; '.join(p['notes']))} · expect <b>{p['speed']}</b> replies.")
+            elif not name:
+                rows.append("No model file yet: put a .gguf in the <code>models</code> folder.")
+        except (OSError, ValueError) as e:
+            rows.append(f'<span class="bad">{html.escape(str(e))}</span>')
+        if gpu:
+            rows.append(f"Model files up to about {gb(backend.biggest_file_mb(hw))} fit wholly on this card with a 32k context.")
+    elif d["backend"] == "server" and gpu:
+        rows.append(f"LM Studio loads the model itself: set <b>GPU Offload</b> to the maximum and <b>Context Length</b> to 32768 there (files up to about {gb(backend.biggest_file_mb(hw))} fit wholly on this card).")
+    return '<div class="card">' + "<br>".join(rows) + '<div class="row" style="margin-top:8px"><button type="submit" formaction="/settings/scan" class="alt">Scan this PC again</button></div></div>'
+
+
 def settings_page(msg="", errs=()) -> bytes:
     d = APP.settings.data
     files = APP.settings.ggufs()
@@ -147,6 +176,9 @@ def settings_page(msg="", errs=()) -> bytes:
     body = f'''<h1>Settings</h1>{notes}<form class="card" method="post" action="/settings">
 <label>Where the AI runs</label>{sel("backend", S.CHOICES["backend"], d["backend"])}
 <p class="mut">gguf = a model file you put in the <code>models</code> folder, run inside this app · server = LM Studio / Ollama on this or another PC · api = an online service that needs an API key · demo = no AI, just to try the app</p>
+{pc_panel()}
+<label>Performance settings</label>{sel("tuning", S.CHOICES["tuning"], d["tuning"])}
+<p class="mut">auto = the program reads this PC and the model file and picks how much runs on the graphics card, the context length and the threads (recommended) · manual = the three fields below</p>
 <label>Model file (in the models folder — {len(files)} found)</label>{sel("gguf", [""] + files, d["gguf"])}
 <label>Run the model file on</label>{sel("device", S.CHOICES["device"], d["device"])}
 <p class="mut">cpu = never use a graphics card (slow but works anywhere) · auto = use one if the library can</p>
@@ -301,10 +333,13 @@ class H(BaseHTTPRequestHandler):
                 return self.send(settings_page("Saved." if not errs else "", errs))
             if parts == ["settings", "check"]:
                 for k, v in f.items():
-                    if k in ("backend", "url", "model", "gguf", "device"):
+                    if k in ("backend", "url", "model", "gguf", "device", "tuning"):
                         APP.settings.data[k] = v          # check what is on the page; Save is still the player's choice
                 started = APP.start("check", "check", lambda: _checked())
                 return self.json({"started": started}) if started else self.send(b"The AI is busy with another job.", 409, "text/plain")
+            if parts == ["settings", "scan"]:
+                APP.settings.hardware(rescan=True)
+                return self.send(settings_page("Scanned this PC again."))
             if parts == ["settings", "test"]:
                 return self.json({"message": self.test_ai(f)})
             if parts == ["delete"]:
