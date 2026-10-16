@@ -152,8 +152,11 @@ def scene(world: World, secret: bool) -> str:
         keys = ("name", "job", "gender", "character", "appearance") + (("drives", "relationships", "knowledge", "plan") if secret else ())
         shown = {k: r[k] for k in keys if k in r}
         shown["doing"] = (r.get("state") or {}).get("status")
+        if (r.get("state") or {}).get("position"):
+            shown["at"] = r["state"]["position"]
         out.append(f"PERSON {rid}: {json.dumps(shown, ensure_ascii=False)}")
     others = [f"{rid}: {r.get('name')}" + (f" ({(r.get('state') or {}).get('status')})" if (r.get("state") or {}).get("status") else "")
+              + (f" [at {(r.get('state') or {}).get('position')}]" if (r.get("state") or {}).get("position") else "")
               for rid, r in (t.get("npcs") or {}).items() if rid not in world.actors_here()] if secret else []
     if others:
         out.append("ELSEWHERE (not present): " + "; ".join(others))
@@ -167,6 +170,8 @@ def pressures(world: World) -> str:
             continue
         c = p.get("clock") or {}
         clock_ = f" · clock '{c.get('name')}' {c.get('filled', 0)}/{c.get('segments')} — pace: {c.get('pace', '')}" if c else ""
+        if c and c.get("waits_for"):
+            clock_ += f" — NOT STARTED: waits for {c['waits_for']}"
         out.append(f"PRESSURE {pid}: {p.get('name')} — now: {(p.get('state') or {}).get('current', '')} — heading: {p.get('trajectory', '')}{clock_}")
     return "\n".join(out) or "PRESSURES: none"
 
@@ -696,6 +701,7 @@ def h_commit(turn: Turn, out: dict):
     facts += tf
     days = trial.time["day_index"] - w.time["day_index"]
     w.tree = trial.tree
+    w.start_waiting_clocks()
     turn.shape_owed = None
     turn.fills = new_fills
     for p, d in turn.dues:
@@ -758,6 +764,7 @@ def h_commit_ops(turn: Turn, out: dict):
     xp = rules.quest_xp(trial, w.tree)
     tl, tf = rules.temper_new(w.tree, trial.tree)
     w.tree = trial.tree
+    w.start_waiting_clocks()
     turn.shape_owed = None
     _record_lines(turn, out["ops"])
     _events(turn, out["ops"])
@@ -1015,7 +1022,12 @@ def intake(world: World, llm, batch: int = 4) -> None:
                     continue
                 try:
                     if a["id"].startswith("active_world_pressures."):
-                        world.set_clock(a["id"], a["dues"][0], a.get("interval_minutes"))
+                        if a["dues"]:
+                            world.set_clock(a["id"], a["dues"][0], a.get("interval_minutes"))
+                        elif a["triggers"]:
+                            world.wait_clock(a["id"], a["triggers"][0], a.get("interval_minutes"))          # "when pest_control opens": dormant until it does
+                        else:
+                            raise ValueError("give the first check as a due, or the event it waits for as a trigger")
                     else:
                         _check_dates(world, a)
                         world.set_dues(a["id"], a["dues"], a["triggers"])

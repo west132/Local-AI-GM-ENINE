@@ -5,7 +5,7 @@ from localgm import combat, flow, mechanics as M
 from localgm.state import World, background_tree, WriteRefused
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "examples"
-HARD = ["ashfall_hunter", "cyberpunk_red_south_nc", "last_scion_boundary", "tarnstead_low_fantasy"]
+HARD = ["ashfall_hunter", "cyberpunk_red_south_nc", "last_scion_boundary", "tarnstead_low_fantasy", "scp_omega99"]
 
 
 class Scripted:

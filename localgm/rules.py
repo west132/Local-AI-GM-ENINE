@@ -9,8 +9,18 @@ from .state import World
 TIER_BOOST = {"T1": 0, "T2": 1, "T3": 2, "T4": 4}            # equipment (B)
 ENTITLEMENT_COST = {"trivial": 0, "ordinary": 1, "T1": 2, "T2": 4, "T3": 8, "T4": 16}
 HOMES = ("capability", "feasibility", "environment", "time", "sensory", "position", "simultaneous")
+QUEST_TYPES = ("SHORT", "MEDIUM", "LONG", "CHAIN", "ONGOING")      # a new offer rolls SHORT, LONG or CHAIN; a background may also write MEDIUM (leveled like SHORT) and ONGOING (a thread with no end or level)
 QUEST_STATUS = ("available", "active", "completed", "failed", "abandoned", "blocked")
 TERMINAL = ("completed", "failed", "abandoned")
+
+
+def locked(status) -> bool:
+    """A quest the background lists but has not opened yet ("locked_until_assigned", "locked_until_day_90"): it is not unfinished business."""
+    return str(status or "").startswith("locked")
+
+
+def quest_status_ok(status) -> bool:
+    return status in QUEST_STATUS or locked(status)
 VITALITY = {"ordinary": 1, "seasoned": 3, "veteran": 5, "exceptional": 8, "heroic": 11, "legendary": 20}
 
 
@@ -165,14 +175,14 @@ def quest_faults(before: dict, after: dict, numeric: bool) -> list[str]:
     for qid, q in qs.items():
         if not isinstance(q, dict):
             continue
-        if q.get("role") not in ("MAIN", "SIDE") or q.get("type") not in ("SHORT", "LONG", "CHAIN") or not str(q.get("objective", "")).strip():
-            out.append(f"quest {qid}: needs role MAIN|SIDE, type SHORT|LONG|CHAIN and an objective")
-        if q.get("status") not in QUEST_STATUS:
-            out.append(f"quest {qid}: status must be one of {QUEST_STATUS}")
-        if q.get("role") == "MAIN" and q.get("status") not in TERMINAL and qid not in children:
+        if q.get("role") not in ("MAIN", "SIDE") or q.get("type") not in QUEST_TYPES or not str(q.get("objective", "")).strip():
+            out.append(f"quest {qid}: needs role MAIN|SIDE, type {'|'.join(QUEST_TYPES)} and an objective")
+        if not quest_status_ok(q.get("status")):
+            out.append(f"quest {qid}: status must be one of {QUEST_STATUS} (or locked_… for a quest not opened yet)")
+        if q.get("role") == "MAIN" and q.get("status") not in TERMINAL and not locked(q.get("status")) and qid not in children:
             main_open += 1
-        if numeric and q.get("type") == "SHORT" and not isinstance(q.get("quest_level"), int):
-            out.append(f"quest {qid}: a SHORT quest needs quest_level before it is available")
+        if numeric and q.get("type") in ("SHORT", "MEDIUM") and not isinstance(q.get("quest_level"), int):
+            out.append(f"quest {qid}: a {q['type']} quest needs quest_level before it is available")
         if q.get("type") == "CHAIN" and q.get("quest_level") is not None:
             out.append(f"quest {qid}: a CHAIN root has no level; each child has its own")
         for c in q.get("child_quests") or []:
@@ -186,7 +196,9 @@ def quest_faults(before: dict, after: dict, numeric: bool) -> list[str]:
                 out.append(f"quest {qid}: quest_level is immutable; a changed challenge is a new quest or segment")
             if o.get("type") != q.get("type"):
                 out.append(f"quest {qid}: type cannot change")
-    if main_open > 1:
+    was_open = sum(1 for qid, q in old.items() if isinstance(q, dict) and q.get("role") == "MAIN" and q.get("status") not in TERMINAL
+                   and not locked(q.get("status")) and qid not in children)
+    if main_open > max(1, was_open):          # a world may start with more (its author's choice); play may not add to them
         out.append("only one MAIN quest may be unfinished at a time")
     return out
 

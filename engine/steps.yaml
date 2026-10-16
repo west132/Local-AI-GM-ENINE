@@ -472,6 +472,7 @@ single:
     - fight: the player attacks someone. Fill foes (only opponents not yet in the records), exchanges, kill. The program fights and asks you again.
     - decision: the action has a real cost, danger or irreversible step that the player's own orders do not answer: fill `decision` (the question and 2-5 options with their costs). Nothing happens yet.
     - confirm: ONLY if "WAITING FOR THE PLAYER'S GO-AHEAD" is shown above and the player agrees to exactly that.
+    PERSON lines are the people at this place; their `at` says where in it they are, so only those whose `at` fits where the player is can be in the scene (the others are not, until the player goes to them).
     Rules for the choice: never roll something another person decides; never decide the result of a roll yourself; if RESULTS are shown above they are already decided: use mode done, never overrule a result, record what follows from it.
     In mode done:
     - cites: exact record paths (see RECORDS YOU CAN CITE). If the records rule the action out, set `blocked` to the reason, leave ops empty and cite what rules it out; the scene then tells the player it does not work.

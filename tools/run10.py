@@ -61,12 +61,22 @@ def main():
     ap.add_argument("background"); ap.add_argument("inputs"); ap.add_argument("out")
     ap.add_argument("--gguf"); ap.add_argument("--ctx", type=int, default=32768); ap.add_argument("--relay", action="store_true")
     ap.add_argument("--style", choices=["one", "steps"], default="one")
+    ap.add_argument("--live", type=int, metavar="ROUNDS", help="the inputs file is written while the run goes: before each round the run waits until the file has that line (up to ROUNDS rounds)")
     a = ap.parse_args()
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
     inner = Relay(out) if a.relay else backend.LlamaCpp(a.gguf, a.ctx, temperature=0.3, max_tokens=1500)
     ai = Recorder(inner, out)
     game = Game.new(out / "saves", "run", pathlib.Path(a.background).read_text(encoding="utf-8"))
-    inputs = [l for l in pathlib.Path(a.inputs).read_text(encoding="utf-8").splitlines() if l.strip()]
+    class Live:
+        """Inputs written one at a time by whoever plays (the line for round i may not exist yet when the run starts)."""
+        def __init__(self, path): self.path = pathlib.Path(path)
+        def lines(self): return [l for l in self.path.read_text(encoding="utf-8").splitlines() if l.strip()] if self.path.exists() else []
+        def __iter__(self):
+            for i in range(a.live):
+                while len(self.lines()) <= i:
+                    time.sleep(0.5)
+                yield self.lines()[i]
+    inputs = Live(a.inputs) if a.live else [l for l in pathlib.Path(a.inputs).read_text(encoding="utf-8").splitlines() if l.strip()]
     log = open(out / "rounds.jsonl", "w", encoding="utf-8")
     t0 = time.time()
     try:

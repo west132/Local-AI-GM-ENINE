@@ -2,7 +2,7 @@
 import pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 import pytest
-from localgm import combat, flow, mechanics as M, rules
+from localgm import coherence, combat, flow, mechanics as M, rules
 from localgm.state import World, background_tree
 from test_flow import Scripted, world, FAST, OK, LOOP_REACT, LOOP_JUDGE, roll_form, force_check
 
@@ -396,3 +396,46 @@ def test_new_actor_temper_is_rolled_once_by_the_program():
         def randint(self, a, b): return 8        # 2d10 = 16: ordinary for a stranger (needs 17), difficult for an opponent (needs 15)
     rules.temper_new({}, hard, Fixed())
     assert hard["npcs"]["c"]["temper"] == "difficult"
+
+
+# ---------- found by playing the SCP Omega-99 background (v5.2 notation) ----------
+
+def _scp():
+    return World(background_tree((pathlib.Path(__file__).resolve().parent.parent / "examples" / "scp_omega99" / "background.md").read_text(encoding="utf-8")))
+
+
+def test_money_written_with_a_thousands_comma_is_a_number():
+    from localgm.state import whole_number
+    assert [whole_number(x) for x in ("1,200", "1 200", 1200, "1200.0", "about 40 silver", "none")] == [1200, 1200, 1200, 1200, 40, 0]
+    assert _scp().cash() == (1200, "USD")
+
+
+def test_a_background_without_hp_starts_the_player_at_full_health():
+    w = _scp()
+    assert w.player["condition"]["hp"] == rules.hp_max(w) == 12
+
+
+def test_a_site_written_with_a_hyphen_is_the_place_its_people_stand_in():
+    w = _scp()
+    assert w.is_here("Site-19 Omega-99 office") and w.is_here("site 19 labs") and not w.is_here("dorm C, room 14") and not w.is_here("New Jersey, a storage unit")
+
+
+def test_a_clock_that_waits_for_a_quest_starts_when_the_quest_opens():
+    w = _scp()
+    w.wait_clock("active_world_pressures.pigeon_breakout", "when pest_control opens", 720)
+    c = w.tree["active_world_pressures"]["pigeon_breakout"]["clock"]
+    assert c["starts_with_quest"] == "pest_control" and "due_at" not in c and "due" not in c and coherence.check(w).count("pressure pigeon_breakout has a first check written but no scheduled time") == 0
+    assert w.start_waiting_clocks() == []                                        # the quest is still locked
+    w.tree["quests"]["pest_control"]["status"] = "active"
+    assert w.start_waiting_clocks() == ["pigeon_breakout"]
+    now = w.time["day_index"] * 1440 + w.time["clock_minutes"]
+    assert c["due_at"] == {"day": (now + 720) // 1440, "clock": (now + 720) % 1440} and "waits_for" not in c
+
+
+def test_a_world_may_start_with_several_main_quests_but_play_may_not_add_more_and_locked_quests_do_not_count():
+    w = _scp()
+    assert rules.quest_faults(w.tree, w.tree, True) == [] and rules.quest_status_ok("locked_until_day_90") and not rules.quest_status_ok("sleeping")
+    more = w.clone()
+    more.tree["quests"]["pest_control"]["role"] = "MAIN"; more.tree["quests"]["pest_control"]["status"] = "active"; more.tree["quests"]["pest_control"].pop("parent", None)
+    assert "only one MAIN quest may be unfinished at a time" in rules.quest_faults(w.tree, more.tree, True)
+    assert not [f for f in coherence.check(w) if "participant" in f]             # "pc" is the player

@@ -180,7 +180,7 @@ def independent_oracle(t, initial):
     for i in t["player"].get("condition", {}).get("injuries", []):
         assert isinstance(i, dict) and i["home"] in rules.HOMES
     for q in (t.get("quests") or {}).values():
-        assert q["status"] in rules.QUEST_STATUS
+        assert rules.quest_status_ok(q["status"])
 
 
 def world_ok(w, initial):

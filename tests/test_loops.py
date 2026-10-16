@@ -325,7 +325,7 @@ def test_every_ai_step_ends_its_message_with_a_task_and_the_sorter_sees_no_secre
 # A practice GM (localgm/simgm.py) that reads the real prompts plays whole games through the real loop, the real saves and the real world,
 # and after every turn the world must agree with itself (localgm/coherence.py).
 
-WORLDS = ["harbour_guesthouse", "ashfall_hunter", "tarnstead_low_fantasy", "last_scion_boundary", "cyberpunk_red_south_nc"]
+WORLDS = ["harbour_guesthouse", "ashfall_hunter", "tarnstead_low_fantasy", "last_scion_boundary", "cyberpunk_red_south_nc", "scp_omega99"]
 
 
 def _script(w):

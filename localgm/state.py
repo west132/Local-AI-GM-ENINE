@@ -215,6 +215,16 @@ def _normalize_plans(tree: dict, cal) -> None:
             rec["plan"] = plan
 
 
+def whole_number(v, default: int = 0) -> int:
+    """A count written the way people write it: 1200, "1,200", "1 200", "1200.0"."""
+    if isinstance(v, bool):
+        return default
+    if isinstance(v, (int, float)):
+        return int(v)
+    m = re.search(r"-?\d[\d,\s]*(?:\.\d+)?", str(v))
+    return int(float(re.sub(r"[,\s]", "", m.group(0)))) if m else default
+
+
 class World:
     def __init__(self, tree: dict, round_no: int = 0):
         self.tree = tree
@@ -224,6 +234,12 @@ class World:
         _normalize_clocks(tree, self.cal)
         self.ensure_work()
         p = tree.get("player") or {}
+        if p and (p.get("condition") or {}).get("hp") is None:
+            p.setdefault("condition", {})["hp"] = self._vitals("player")[2]          # a background that does not write HP starts the player at full health
+        if isinstance(p.get("money"), dict) and "cash_and_accessible_funds" in p["money"]:
+            p["money"]["cash_and_accessible_funds"] = whole_number(p["money"]["cash_and_accessible_funds"])
+        elif isinstance(p.get("money"), str):
+            p["money"] = whole_number(p["money"])
         if (tree.get("enabled_modules") or {}).get("flexible_item_entitlement") and "item_points" not in p:
             p["item_points"] = int((p.get("starting_item_points") or {}).get("points", 0))
 
@@ -442,6 +458,33 @@ class World:
         if interval_minutes:
             c["interval_minutes"] = int(interval_minutes)
 
+    def wait_clock(self, path: str, condition: str, interval_minutes: int | None) -> None:
+        """A pressure whose first check waits for an event ("when pest_control opens"): dormant until a quest it names becomes active; then the program starts it."""
+        c = self.get(path + ".clock")
+        c["waits_for"] = str(condition)
+        quests = self.tree.get("quests") or {}
+        named = [q for q in quests if re.search(r"\b" + re.escape(q) + r"\b", str(condition))]
+        if named:
+            c["starts_with_quest"] = named[0]
+        iv = interval_minutes or clock_interval(c.get("pace", ""))
+        if iv:
+            c["interval_minutes"] = int(iv)
+        c.pop("due", None)
+
+    def start_waiting_clocks(self) -> list[str]:
+        """Start every dormant clock whose quest is now active: its first check falls one interval from now. Returns what started."""
+        started = []
+        for pid, pr in (self.tree.get("active_world_pressures") or {}).items():
+            c = pr.get("clock") if isinstance(pr, dict) else None
+            if not isinstance(c, dict) or not c.get("starts_with_quest"):
+                continue
+            if (self.tree.get("quests", {}).get(c["starts_with_quest"]) or {}).get("status") == "active":
+                at = self.time["day_index"] * 1440 + self.time["clock_minutes"] + int(c.get("interval_minutes") or 1440)
+                c["due_at"] = {"day": at // 1440, "clock": at % 1440}
+                started.append(pid)
+                c.pop("starts_with_quest"), c.pop("waits_for", None)
+        return started
+
     def needs_intake(self) -> list[str]:
         out = [f"{k}.{rid}" for k in ("npcs", "factions") for rid, r in (self.tree.get(k) or {}).items()
                if isinstance(r, dict) and r.get("plan")
@@ -468,8 +511,8 @@ class World:
         """(amount, currency). BACKGROUND money is a number, or {cash_and_accessible_funds, currency, note}."""
         m = self.player.get("money", 0)
         if isinstance(m, dict):
-            return int(m.get("cash_and_accessible_funds", 0)), str(m.get("currency", ""))
-        return int(m), ""
+            return whole_number(m.get("cash_and_accessible_funds", 0)), str(m.get("currency", ""))
+        return whole_number(m), ""
 
     def pay(self, amount: int) -> None:
         """Spend (negative) or receive (positive) money; never below zero."""
@@ -567,9 +610,10 @@ class World:
         pos = str(position or "").lower()
         if not pos:
             return False
-        if pos == here.lower() or here.lower() in pos:
-            return True
+        squash = lambda x: re.sub(r"[^a-z0-9]", "", x)
         name = str(self.location().get("name", "")).lower()
+        if pos == here.lower() or here.lower() in pos or (len(squash(name)) >= 4 and squash(name) in squash(pos)):          # "Site-19" is "site19" is "Site 19"
+            return True
         words = {w for w in re.findall(r"[a-z]{4,}", name)}
         return len(words & set(re.findall(r"[a-z]{4,}", pos))) >= 2
 

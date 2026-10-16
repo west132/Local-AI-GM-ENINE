@@ -60,14 +60,11 @@ def check(w: World) -> list[str]:
         if isinstance(res, dict) and isinstance(res.get("count"), int) and res["count"] < 0:
             out.append(f"resource {rid} is below zero")
     # quests
-    mains = [q for q, r in (t.get("quests") or {}).items() if isinstance(r, dict) and r.get("role") == "MAIN" and r.get("status") == "active"]
-    if len(mains) > 1:
-        out.append(f"more than one MAIN quest is active: {mains}")
     for q, r in (t.get("quests") or {}).items():
         if not isinstance(r, dict):
             continue
         for who in r.get("participants") or []:
-            if who not in (t.get("npcs") or {}) and who not in (t.get("factions") or {}) and who != "player" and not str(who).startswith("player"):
+            if who not in (t.get("npcs") or {}) and who not in (t.get("factions") or {}) and str(who).lower() not in ("player", "pc", "you") and not str(who).startswith("player"):
                 out.append(f"quest {q}: participant {who!r} is not a record")
     # the ledger of resolved results points at records that still exist
     for e in t.get("resolved") or []:
@@ -84,6 +81,9 @@ def check_step(before: World, after: World, events: list[dict] | None = None) ->
         out.append("time went backwards")
     if after.round != before.round + 1:
         out.append(f"the round moved {before.round} -> {after.round}")
+    mains = lambda w: [q for q, r in (w.tree.get("quests") or {}).items() if isinstance(r, dict) and r.get("role") == "MAIN" and r.get("status") == "active"]
+    if len(mains(after)) > max(1, len(mains(before))):          # a world may start with several (its author's choice); play must not add more
+        out.append(f"more than one MAIN quest is active: {mains(after)}")
     if events is not None:
         changed = _changed_paths(before.tree, after.tree)
         logged = {re.sub(r"^(set|append|remove|plan|tracker)\s+", "", e.get("change", "")) for e in events}
