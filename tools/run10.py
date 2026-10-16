@@ -59,7 +59,8 @@ class Relay:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("background"); ap.add_argument("inputs"); ap.add_argument("out")
-    ap.add_argument("--gguf"); ap.add_argument("--ctx", type=int, default=16384); ap.add_argument("--relay", action="store_true")
+    ap.add_argument("--gguf"); ap.add_argument("--ctx", type=int, default=32768); ap.add_argument("--relay", action="store_true")
+    ap.add_argument("--style", choices=["one", "steps"], default="one")
     a = ap.parse_args()
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
     inner = Relay(out) if a.relay else backend.LlamaCpp(a.gguf, a.ctx, temperature=0.3, max_tokens=1500)
@@ -79,7 +80,7 @@ def main():
         before_round, c0, t1 = game.world.round, ai.n, time.time()
         rec = {"round_attempt": i, "input": text, "header_before": header(game.world)}
         try:
-            turn = flow.run_turn(game.world, ai, text)
+            turn = flow.run_turn(game.world, ai, text, style=a.style)
             game.log({"input": text, "sort": turn.sort, "lines": turn.lines, "facts": turn.facts, "events": turn.events, "prose": turn.prose})
             game.save()
             rec |= {"ok": True, "sort": turn.sort, "ran": turn.ran, "lines": turn.lines, "facts": turn.facts, "events": turn.events,
